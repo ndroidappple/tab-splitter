@@ -536,7 +536,7 @@ function peoplePanel(C) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
         const what = T.mode !== 'even' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
-        return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Who had it?</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
+        return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Who had it?</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">Claim it</button>`}</li>`;
       }).join('')}</ul>`;
     }
     if (!T.closed && isHost) {
