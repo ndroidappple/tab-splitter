@@ -2,19 +2,13 @@
 
 Live bill splitter. Friends tap their name, claim what they had, and pay Nick on Venmo. Everyone's phone stays in sync.
 
-## Put it online (one time, about 3 minutes)
+## Put it online (from your phone)
 
-Netlify's drag-and-drop doesn't run the sync function, so deploy from Terminal instead. You need Node.js 18 or newer (from nodejs.org).
+1. Go to app.netlify.com and sign in.
+2. Tap **Add new project → Import an existing project → GitHub**, allow access, and pick `oct17-tab`.
+3. Leave every setting as it is (`netlify.toml` already has them) and tap **Deploy**.
 
-```
-cd ~/Downloads/tab-split
-npm install
-npx netlify-cli deploy --prod
-```
-
-- The first run opens your browser to log in to Netlify.
-- When it asks about linking, choose **Create & configure a new project** and give it a name, like `oct17-tab`.
-- It prints your live URL when it finishes. Text that link to the group.
+In about a minute Netlify gives you a link. Text it to the group. Any later change pushed to this repo redeploys on its own.
 
 ## What's where
 
