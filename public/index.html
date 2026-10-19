@@ -256,37 +256,15 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.45)}
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <noscript><p style="padding:20px">This page needs JavaScript turned on.</p></noscript>
 
-<script>
+<script type="module">
+import { PAYER, ITEMS, SUB, TAX, FEE, TIP, TOTAL, compute as computeSplit, people as peopleOf } from './split.mjs';
 (() => {
 'use strict';
 
-/* ---------- Bill (amounts in cents) ---------- */
+/* ---------- Bill (amounts in cents; the items live in split.mjs) ---------- */
 const API = '/api/tab';
-const PAYER = 'nick';
 const VENMO = 'nick-szambelan';
 const NOTE = 'Oct 17 tab';
-const ITEMS = [
-  {id:'bloody',   name:'Bloody Mary',                       qty:1, cents:1000, cat:'Drinks'},
-  {id:'mojito',   name:'Door County Cherry Mojito',         qty:3, cents:3000, cat:'Drinks'},
-  {id:'vacay',    name:'Vacationland, Door County Brewing', qty:1, cents:600,  cat:'Drinks'},
-  {id:'lemonade', name:'Cherry Lemonade',                   qty:2, cents:1800, cat:'Drinks'},
-  {id:'carbliss', name:'Carbliss',                          qty:7, cents:4200, cat:'Drinks'},
-  {id:'shandy',   name:'Linneys Summer Shandy',             qty:1, cents:600,  cat:'Drinks'},
-  {id:'mule',     name:'Cherry Mule',                       qty:2, cents:2000, cat:'Drinks'},
-  {id:'cow',      name:'Spotted Cow',                       qty:9, cents:4500, cat:'Drinks'},
-  {id:'miller',   name:'Miller Light Draft',                qty:1, cents:300,  cat:'Drinks'},
-  {id:'rumple',   name:'Rumpleminz',                        qty:4, cents:1200, cat:'Drinks'},
-  {id:'fireball', name:'Fireball',                          qty:3, cents:900,  cat:'Drinks'},
-  {id:'curds',    name:'Cheese Curds',                      qty:3, cents:2685, cat:'Food', def:'share'},
-  {id:'csalad',   name:'Doco Cherry Salad',                 qty:1, cents:1995, cat:'Food'},
-  {id:'wrap',     name:'Fire Chicken Wrap',                 qty:1, cents:1495, cat:'Food'},
-  {id:'wings',    name:'Chicken Wings (12)',                qty:1, cents:1495, cat:'Food'},
-  {id:'hsalad',   name:'House Salad',                       qty:1, cents:1295, cat:'Food'},
-  {id:'pork',     name:'DoCo Pulled Pork',                  qty:1, cents:1295, cat:'Food'},
-  {id:'fish',     name:'Fish and Chips',                    qty:2, cents:3390, cat:'Food'},
-  {id:'philly',   name:'Philly Cheese Steak',               qty:1, cents:1695, cat:'Food'},
-];
-const SUB = 35445, TAX = 901, FEE = 1063, TIP = 7089, TOTAL = 44498, FEES = TAX + FEE;
 const PALETTE = ['#2F5BD3','#0E8A5C','#C2410C','#7C3AED','#0E7490','#BE185D','#4D7C0F','#A16207','#4338CA','#0F766E','#9D174D','#475569'];
 const ME_KEY = 'tab-me-2026-10-17';
 const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
@@ -307,6 +285,24 @@ let recOpen = false;
 let sheet = null;
 let lastActivity = Date.now(), lastChange = Date.now();
 
+/* ---------- Event log ---------- */
+// A random tag this browser keeps, so the report can tell phones apart.
+// It isn't tied to anything about the person.
+let DEVICE = null;
+try { DEVICE = localStorage.getItem('tab-device'); } catch (e) {}
+if (!DEVICE || !/^[a-z0-9]{4,24}$/.test(DEVICE)){
+  DEVICE = Math.random().toString(36).slice(2, 12).padEnd(10, '0');
+  try { localStorage.setItem('tab-device', DEVICE); } catch (e) {}
+}
+// Fire-and-forget: sendBeacon still delivers when the page is closing,
+// for example right as Venmo opens.
+function beacon(body){
+  const text = JSON.stringify(Object.assign({ device: DEVICE, actor: me || undefined }, body));
+  try { if (navigator.sendBeacon && navigator.sendBeacon(API, new Blob([text], { type: 'text/plain' }))) return; } catch (e) {}
+  fetch(API, { method:'POST', body:text, keepalive:true }).catch(() => {});
+}
+function track(type, extra){ beacon(Object.assign({ op:'event', type }, extra)); }
+
 /* ---------- Helpers ---------- */
 const fmt = c => '$' + (Math.round(c) / 100).toFixed(2);
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -316,10 +312,7 @@ const av = (p, cls = '') => `<span class="av ${cls}" style="--pc:${pc(p)}" aria-
 function setHTML(el, html){ if (el._h !== html){ el._h = html; el.innerHTML = html; } }
 function venmoUrl(c){ return `https://venmo.com/${VENMO}?txn=pay&amount=${(Math.round(c) / 100).toFixed(2)}&note=${encodeURIComponent(NOTE)}&audience=private`; }
 function siteUrl(){ return location.origin + location.pathname; }
-function people(){
-  return Object.entries(S.people).map(([id, v]) => Object.assign({ id }, v))
-    .sort((a, b) => a.id === PAYER ? -1 : b.id === PAYER ? 1 : (a.t || 0) - (b.t || 0));
-}
+function people(){ return peopleOf(S); }
 function units(i, p){
   const k = i + '|' + p;
   if (pend.has(k)) return pend.get(k);
@@ -330,74 +323,12 @@ function modeOf(it){
   return pendModes.get(it.id) || S.modes[it.id] || it.def || 'count';
 }
 
-/* ---------- Split math ---------- */
-function lineLabel(it, m, u, ent, tot, even){
-  if (m === 'count' && tot <= it.qty) return `${it.name} ×${u}`;
-  if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on bill)`;
-  if (ent.length === 1) return it.name;
-  return even ? `${it.name}, split ${ent.length} ways` : `${it.name}, ${u} of ${tot} shares`;
-}
-function compute(){
-  const ppl = people(), N = ppl.length;
-  const byId = {};
-  ppl.forEach(p => byId[p.id] = { p, sub:0, lines:[] });
-  const info = {};
-  let claimed = 0;
-  for (const it of ITEMS){
-    const m = modeOf(it);
-    const ent = ppl.map(p => [p.id, units(it.id, p.id)]).filter(([, u]) => u > 0);
-    const tot = ent.reduce((s, [, u]) => s + u, 0);
-    const out = {};
-    let c = 0, over = 0, left;
-    if (!ent.length) left = m === 'count' ? it.qty : 1;
-    else if (m === 'count' && tot <= it.qty){
-      const unit = it.cents / it.qty;
-      ent.forEach(([p, u]) => out[p] = u * unit);
-      c = tot * unit; left = it.qty - tot;
-    } else {
-      ent.forEach(([p, u]) => out[p] = it.cents * u / tot);
-      c = it.cents; left = 0;
-      if (m === 'count') over = tot - it.qty;
-    }
-    const even = ent.every(([, u]) => u === (ent[0] || [0, 0])[1]);
-    info[it.id] = { m, ent, tot, out, c, over, left, even, done: ent.length > 0 && left === 0 };
-    claimed += c;
-    ent.forEach(([p, u]) => { byId[p].sub += out[p]; byId[p].lines.push({ label:lineLabel(it, m, u, ent, tot, even), amt:out[p] }); });
-  }
-  const leftover = SUB - claimed > 0.5 ? SUB - claimed : 0;
-  if (S.leftover === 'split' && N && leftover){
-    const share = leftover / N;
-    ppl.forEach(p => { byId[p.id].sub += share; byId[p.id].lines.push({ label:'Share of unclaimed items', amt:share }); });
-  }
-  const res = ppl.map(p => {
-    const r = byId[p.id];
-    r.fees = r.sub * FEES / SUB;
-    r.tip = S.tip === 'even' ? TIP / N : r.sub * TIP / SUB;
-    r.exact = r.sub + r.fees + r.tip;
-    return r;
-  });
-  // Round to cents so everyone's totals add up exactly (largest remainder)
-  const target = Math.round(res.reduce((t, r) => t + r.exact, 0));
-  const cents = res.map(r => Math.floor(r.exact + 1e-9));
-  let rem = target - cents.reduce((a, b) => a + b, 0);
-  res.map((r, i) => [i, r.exact - Math.floor(r.exact + 1e-9)]).sort((a, b) => b[1] - a[1])
-     .forEach(([i]) => { if (rem > 0){ cents[i]++; rem--; } });
-  res.forEach((r, i) => {
-    r.total = cents[i];
-    r.subR = Math.round(r.sub); r.feesR = Math.round(r.fees); r.tipR = r.total - r.subR - r.feesR;
-    r.owed = r.p.id === PAYER ? 0 : r.total - (r.p.paid || 0);
-  });
-  const others = res.filter(r => r.p.id !== PAYER);
-  const collected = others.reduce((s, r) => s + (r.p.paid || 0), 0);
-  const expected = others.reduce((s, r) => s + r.total, 0);
-  const assigned = res.reduce((s, r) => s + r.total, 0);
-  const openItems = ITEMS.filter(it => !info[it.id].done);
-  return { ppl, res, byId, info, claimed, leftover, collected, expected, assigned, unassigned:TOTAL - assigned, openItems };
-}
+/* ---------- Split math (shared with the server, in split.mjs) ---------- */
+function compute(){ return computeSplit(S, { units, modeOf }); }
 
 /* ---------- Server sync ---------- */
 async function post(body){
-  const r = await fetch(API, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(body), keepalive:true });
+  const r = await fetch(API, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(Object.assign({ device: DEVICE, actor: me || undefined }, body)), keepalive:true });
   let d = {};
   try { d = await r.json(); } catch (e) {}
   if (!r.ok){ const err = new Error(d.error || 'Couldn’t save that. Check your connection.'); err.status = r.status; throw err; }
@@ -816,6 +747,7 @@ $('#sheetBody').addEventListener('submit', e => {
 });
 // After the Venmo link opens, ask whether the payment went through
 function afterPay(amt){
+  track('pay_tapped', { amount: Math.round(amt) });
   setTimeout(() => openSheet({ type:'paycheck', amt }), 700);
 }
 
@@ -825,6 +757,7 @@ function refocus(sel){ requestAnimationFrame(() => { const el = document.querySe
 $('#names').addEventListener('click', e => {
   const b = e.target.closest('[data-act="pick"]'); if (!b) return;
   setMe(b.dataset.p);
+  beacon({ op:'pick', p: b.dataset.p });
   const p = S.people[b.dataset.p];
   if (p) toast(`Hi ${p.name}! Tap what you had.`);
 });
@@ -903,6 +836,7 @@ function nudgeText(C){
   return out.join('\n');
 }
 async function nudge(C){
+  track('nudge_sent');
   const text = nudgeText(C);
   if (navigator.share){
     try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
@@ -910,6 +844,7 @@ async function nudge(C){
   copy(text, 'Message copied. Paste it in the group chat.');
 }
 async function shareLink(){
+  track('share_tapped');
   const url = siteUrl();
   if (navigator.share){
     try { await navigator.share({ title:'Oct 17 tab', text:'Tap your name and claim what you had:', url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
@@ -939,6 +874,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', () => { poll(); if (pend.size) scheduleFlush(50); });
 window.addEventListener('pagehide', () => { if (pend.size) flush(); });
 poll(true);
+track('link_opened');
 })();
 </script>
 </body>
