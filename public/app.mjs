@@ -1,5 +1,5 @@
 // The tab page: start a tab (host), claim and pay (friends), and the host's panel.
-import { HOST, SLACK, compute, people as peopleOf, itemsTotal } from './split.mjs';
+import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName } from './split.mjs';
 
 const API = '/api/tab';
 const PALETTE = ['#2F5BD3', '#0E8A5C', '#C2410C', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#A16207', '#4338CA', '#0F766E', '#9D174D', '#475569'];
@@ -111,7 +111,7 @@ async function scanPhoto(file) {
     const rc = d.receipt || {};
     S.receipt = rc; S.check = d.check; S.scan = d.model;
     S.title = rc.merchant || '';
-    S.items = (rc.items || []).map((it) => ({ name: it.name || '', qty: it.quantity || 1, price: dollars(Math.round((it.price || 0) * 100)) }));
+    S.items = (rc.items || []).map((it) => ({ name: tidyName(it.name || '', it.quantity || 1), qty: it.quantity || 1, price: dollars(Math.round((it.price || 0) * 100)) }));
     S.charge = dollars(d.charge);
     S.step = 'review';
   } catch (e) {
@@ -228,7 +228,8 @@ async function createTab() {
   if (!S.hostName.trim()) { toast('Enter your name'); $('#hostName').focus(); return; }
   const btn = app.querySelector('[data-act="create"]'); btn.disabled = true;
   try {
-    const d = await post({ op: 'create', title: S.title, hostName: S.hostName.trim(), venmo: S.venmo.trim(), items, charge, people: S.people, mode: S.mode, device: DEVICE, scan: S.scan || 'typed' });
+    const title = S.title.trim() || `Tab · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const d = await post({ op: 'create', title, hostName: S.hostName.trim(), venmo: S.venmo.trim(), items, charge, people: S.people, mode: S.mode, device: DEVICE, scan: S.scan || 'typed' });
     store.set('tab-profile', JSON.stringify({ name: S.hostName.trim(), venmo: S.venmo.trim() }));
     tabId = d.id; hostKey = d.hostKey; me = HOST; isHost = true;
     store.set('tab-host:' + tabId, hostKey); store.set('tab-me:' + tabId, HOST);
@@ -258,6 +259,7 @@ app.addEventListener('click', (e) => {
    ====================================================================== */
 let T = null;
 let view = 'items';
+let editFor = null; // the host is editing this person's items
 const pend = new Map(); // "item|person" -> units not yet saved
 const pendModes = new Map();
 const openPeople = new Set();
@@ -285,6 +287,7 @@ function venmoUrl(c) {
 function accept(st) {
   if (!st || typeof st.rev !== 'number') return;
   if (T && st.rev < T.rev) return;
+  st.items = (st.items || []).map((it) => Object.assign({}, it, { name: tidyName(it.name, it.qty) }));
   T = st;
   if (me && !T.people[me]) { me = null; store.set('tab-me:' + tabId, null); toast('You’re no longer on this tab. Pick your name again.'); }
   renderAll();
@@ -377,57 +380,90 @@ function renderJoin() {
       <button class="btn" type="submit" style="flex:0 0 auto">Join</button></form>`}`);
 }
 
+// Whose items the item controls change: the host can switch to editing someone else's.
+const who = () => (editFor && T.people[editFor] ? editFor : me);
+const shortName = (p) => (p === me ? 'You' : p === HOST ? T.payer.name : nameOf(p));
+
+// "Nick ×4, Anna ×3" or "Anna, Nick" or "Everyone but Ben"
+function holders(it, inf) {
+  if (!inf.ent.length) return '';
+  if (T.mode === 'even') {
+    const all = people().length;
+    if (inf.ent.length === all) return 'Everyone';
+    const outs = people().filter((p) => !inf.ent.some(([id]) => id === p.id)).map((p) => shortName(p.id));
+    return outs.length <= 2 ? `Everyone but ${outs.join(' and ')}` : inf.ent.map(([id]) => shortName(id)).join(', ');
+  }
+  return inf.ent.map(([id, u]) => (inf.m === 'count' && it.qty > 1 ? `${shortName(id)} ×${u}` : shortName(id))).join(', ');
+}
+function needsSomeone(it, inf) {
+  return T.mode === 'even' ? !inf.ent.length : (!inf.done || inf.over > 0);
+}
+
 function itemsList(C) {
   const even = T.mode === 'even';
-  const help = even
-    ? 'Everything is split evenly. Untick anything you didn’t have.'
-    : 'Tap what you had. For shared plates, use ⋯ to add everyone who shared.';
-  const open = C.openItems.length;
-  let html = `<p class="note" style="margin:0 2px 10px">${help}</p>`;
-  if (!even && open) html += `<p class="note" style="margin:0 2px 10px">${open} ${open === 1 ? 'item' : 'items'} nobody has claimed yet.</p>`;
-  html += '<div class="rows">' + T.items.map((it) => itemRowHtml(it, C)).join('') + '</div>';
+  const target = who();
+  let html = '';
+  if (editFor && T.people[editFor]) {
+    html += `<div class="banner edit" role="status"><span>Editing <b>${esc(nameOf(editFor))}</b>’s items. Tap to add or remove.</span>
+      <button type="button" class="btn sm" data-act="editdone">Done</button></div>`;
+  } else {
+    html += `<p class="note" style="margin:0 2px 12px">${even ? 'Everything is split evenly. Untick anything you didn’t have.' : 'Tap what you had. For a shared plate, use ⋯ to add everyone who shared it.'}</p>`;
+  }
+  const needs = T.items.filter((it) => needsSomeone(it, C.info[it.id]));
+  const taken = T.items.filter((it) => !needsSomeone(it, C.info[it.id]));
+  if (needs.length) {
+    html += `<h2 class="group">${even ? 'Nobody had these' : 'Needs someone'} <span class="count warn">${needs.length}</span></h2>
+      <div class="rows">${needs.map((it) => itemRowHtml(it, C, target)).join('')}</div>`;
+  }
+  if (taken.length) {
+    html += `<h2 class="group">${even ? 'Shared' : 'Claimed'} <span class="count ok">${taken.length}</span></h2>
+      <div class="rows">${taken.map((it) => itemRowHtml(it, C, target)).join('')}</div>`;
+  }
   return html;
 }
-function itemRowHtml(it, C) {
+
+function itemRowHtml(it, C, target) {
   const inf = C.info[it.id], even = T.mode === 'even';
-  const m = inf.m, myU = units(it.id, me), mine = myU > 0;
-  const meta = [];
-  if (!even && m === 'count' && it.qty > 1) {
-    meta.push(`<span class="money">${fmt(it.cents / it.qty)} each</span>`);
-    if (inf.over > 0) meta.push(`<em>${inf.over} too many claimed</em>`);
-    else if (!inf.tot) meta.push('<em>none claimed</em>');
-    else if (inf.left > 0) meta.push(`<em>${inf.left} left</em>`);
-  } else {
-    meta.push(`<span class="money">${fmt(it.cents)}</span>`);
-    if (!inf.ent.length) meta.push(even ? '<em>nobody had it</em>' : '<em>unclaimed</em>');
-    else if (inf.ent.length > 1) meta.push(`<span>split ${inf.ent.length} ways</span>`);
-  }
-  if (mine && inf.out[me] != null) meta.push(`<b class="money">You ${fmt(inf.out[me])}</b>`);
-  const addedBy = T.by && T.by[it.id] && T.by[it.id][me];
-  if (addedBy && addedBy !== me && (mine || even)) meta.push(`<span class="tag">${even ? 'Changed' : 'Added'} by ${esc(addedBy === HOST ? T.payer.name : nameOf(addedBy))}</span>`);
-  const label = `${esc(it.name)}${it.qty > 1 ? ` <span class="muted">×${it.qty}</span>` : ''}`;
-  let ctl;
-  if (T.closed) ctl = '';
-  else if (!even && m === 'count' && it.qty > 1) {
-    ctl = mine
-      ? `<span class="step"><button type="button" data-act="dec" data-i="${it.id}" aria-label="One fewer ${esc(it.name)}">−</button><output aria-label="You have">${myU}</output><button type="button" data-act="inc" data-i="${it.id}" aria-label="One more ${esc(it.name)}">+</button></span>`
-      : `<button type="button" class="plus" data-act="inc" data-i="${it.id}" aria-label="I had one ${esc(it.name)}">+</button>`;
-  } else {
-    ctl = `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${even ? 'I had' : 'Mine:'} ${esc(it.name)}">${CHECK}</button>`;
+  const m = inf.m, myU = units(it.id, target), mine = myU > 0;
+  const forName = target === me ? '' : ` for ${nameOf(target)}`;
+  // Status line: what's left, then who has it
+  let status;
+  if (inf.over > 0) status = `<span class="st warn">${inf.over} too many claimed</span>`;
+  else if (!inf.ent.length) status = `<span class="st warn">${even ? 'Nobody' : 'Unclaimed'}</span>`;
+  else if (!even && m === 'count' && it.qty > 1 && inf.left > 0) status = `<span class="st warn">${inf.left} of ${it.qty} left</span>`;
+  else status = '<span class="st ok">✓</span>';
+  const price = !even && m === 'count' && it.qty > 1 ? `${fmt(it.cents / it.qty)} each` : fmt(it.cents);
+  const meta = [`<span class="money">${price}</span>`, status];
+  const h = holders(it, inf);
+  if (h) meta.push(`<span class="who">${esc(h)}</span>`);
+  if (mine && inf.out[target] != null) meta.push(`<b class="money">${target === me ? 'You' : esc(nameOf(target))} ${fmt(inf.out[target])}</b>`);
+  const addedBy = T.by && T.by[it.id] && T.by[it.id][target];
+  if (!editFor && addedBy && addedBy !== target && (mine || even)) meta.push(`<span class="tag">${even ? 'Changed' : 'Added'} by ${esc(shortName(addedBy))}</span>`);
+  const name = esc(it.name);
+  let ctl = '';
+  if (!T.closed) {
+    if (!even && m === 'count' && it.qty > 1) {
+      ctl = mine
+        ? `<span class="step"><button type="button" data-act="dec" data-i="${it.id}" aria-label="One fewer ${name}${forName}">−</button><output>${myU}</output><button type="button" data-act="inc" data-i="${it.id}" aria-label="One more ${name}${forName}">+</button></span>`
+        : `<button type="button" class="plus" data-act="inc" data-i="${it.id}" aria-label="Add one ${name}${forName}">+</button>`;
+    } else {
+      ctl = `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${name}${forName}">${CHECK}</button>`;
+    }
   }
   return `<div class="row${mine ? ' mine' : ''}">
-    <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${esc(it.name)}: who had it">
-      <span class="r-name">${label}</span><span class="r-meta">${meta.join('')}</span></button>
+    <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had it">
+      <span class="r-name">${name}${it.qty > 1 ? ` <span class="muted">×${it.qty}</span>` : ''}</span><span class="r-meta">${meta.join('')}</span></button>
     ${ctl}
-    ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who had ${esc(it.name)}">⋯</button>`}</div>`;
+    ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who had ${name}">⋯</button>`}</div>`;
 }
 
 function statusOf(r) {
   const p = r.p;
+  if (p.id === HOST) return ['', 'Paid the bill'];
   if (p.waived && r.settled) return ['done', p.paid ? `Paid ${fmt(p.paid)}, rest let go` : 'Let go'];
   if (p.paid != null && r.owed <= SLACK) return p.ok ? ['done', 'Paid ✓'] : ['done', `Says paid ${fmt(p.paid)}. Check Venmo`];
   if (p.paid != null) return ['due', `Paid ${fmt(p.paid)}, owes ${fmt(r.owed)} more`];
-  if (!r.total) return ['', 'Nothing claimed yet'];
+  if (!r.total) return ['due', 'No items yet'];
   return ['due', `Owes ${fmt(r.owed)}`];
 }
 
@@ -435,21 +471,21 @@ function hostPanel(C) {
   const others = C.res.filter((r) => r.p.id !== HOST);
   const pct = C.expected ? Math.min(100, Math.round((C.collected / C.expected) * 100)) : 0;
   let html = `<div class="card"><h3 class="money">${fmt(C.collected)} of ${fmt(C.expected)} paid back</h3>
-    <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
-    <p class="note money">Your own share is ${fmt(C.byId[HOST].total)}. Everyone’s totals include tax, fees and tip in proportion to what they had.</p></div>`;
+    <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div></div>`;
 
   if (C.openItems.length || Math.abs(C.pool) > SLACK) {
-    html += `<div class="card"><h3 class="money">Not covered yet: ${fmt(C.pool)}</h3>`;
-    if (C.openItems.length) {
-      html += `<p class="note">Assign each to whoever had it.</p><ul class="lines">${C.openItems.map((it) => {
+    const n = C.openItems.length;
+    html += `<div class="card attention"><h3 class="money">${n ? `${n} ${n === 1 ? 'item needs' : 'items need'} someone` : 'Not covered yet'} · ${fmt(C.pool)}</h3>
+      <p class="note" style="margin-top:0">Until it’s settled, this is on you.</p>`;
+    if (n) {
+      html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
         const what = inf.m === 'count' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
         return `<li><span>${esc(what)}</span><button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Assign</button></li>`;
       }).join('')}</ul>`;
     }
     if (!T.closed) {
-      html += `<p class="note">Or settle the rest in one tap:</p><div class="acts">
-        <button type="button" class="btn sm" data-act="pool" data-v="spread">Split it across everyone who hasn’t paid</button>
+      html += `<div class="acts"><button type="button" class="btn sm" data-act="pool" data-v="spread">Split across everyone who hasn’t paid</button>
         <button type="button" class="btn sm ghost" data-act="pool" data-v="cover">I’ll cover it</button></div>`;
     }
     html += '</div>';
@@ -457,35 +493,48 @@ function hostPanel(C) {
     html += `<p class="banner ok">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : 'You’re covering anything unclaimed.'} <button type="button" class="link" data-act="pool" data-v="none">Undo</button></p>`;
   }
 
-  html += `<div class="card"><h3>People</h3>${others.map((r) => personHtml(r, C)).join('') || '<p class="note">Nobody else yet. Add people below or share the link.</p>'}
+  html += `<h2 class="group">People <span class="count">${others.length + 1}</span></h2>
+    <div class="stack">${[C.byId[HOST], ...others].map((r) => personCard(r)).join('')}</div>
     ${T.closed ? '' : `<form id="addPerson" class="row2" style="margin-top:12px" autocomplete="off"><label class="sr" for="addPersonName">Add someone</label>
-      <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>`}</div>`;
+      <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>`}`;
 
-  const done = C.allPaid || (others.every((r) => r.settled || !r.total) && Math.abs(C.pool) <= SLACK);
-  html += `<div class="card"><h3>Tab</h3><div class="acts">
+  const allDone = C.allPaid || (others.every((r) => r.settled || !r.total) && Math.abs(C.pool) <= SLACK);
+  html += `<h2 class="group">Tab</h2><div class="card"><div class="acts" style="margin-top:0">
     <button type="button" class="btn sm ghost" data-act="share">Share the link</button>
     <button type="button" class="btn sm ghost" data-act="report">See the report</button>
     ${T.closed ? '<button type="button" class="btn sm ghost" data-act="reopen">Reopen</button>'
-    : `<button type="button" class="btn sm${done ? '' : ' ghost'}" data-act="close" ${done ? '' : 'aria-describedby="closeNote"'}>Close the tab</button>`}</div>
-    ${!T.closed && !done ? '<p class="note" id="closeNote">You can close it once everyone has paid and nothing is left uncovered.</p>' : ''}</div>`;
+    : `<button type="button" class="btn sm${allDone ? '' : ' ghost'}" data-act="close" ${allDone ? '' : 'aria-describedby="closeNote"'}>Close the tab</button>`}</div>
+    ${!T.closed && !allDone ? '<p class="note" id="closeNote">You can close it once everyone has paid and nothing is left uncovered.</p>' : ''}</div>`;
   return html;
 }
-function personHtml(r, C) {
-  const p = r.p, [cls, status] = statusOf(r);
+
+function personCard(r) {
+  const p = r.p, isMe = p.id === HOST, [cls, status] = statusOf(r);
+  const items = r.lines.length
+    ? `<ul class="mini-items">${r.lines.map((l) => `<li><span>${esc(l.label)}</span><span class="money">${fmt(l.amt)}</span></li>`).join('')}
+       <li class="muted"><span>Tax, fees and tip</span><span class="money">${fmt(r.extrasR)}</span></li></ul>`
+    : '<p class="note" style="margin:6px 0 0">No items yet.</p>';
   let acts = '';
+  let more = '';
   if (!T.closed) {
-    if (!r.settled && r.owed > SLACK) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind privately</button>`;
-    acts += `<button type="button" class="btn sm ghost" data-act="assignTo" data-p="${p.id}">Add items for them</button>`;
-    if (!r.settled && r.owed > SLACK) acts += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;
-    if (p.paid != null && !p.ok) acts += `<button type="button" class="btn sm ghost" data-act="confirm" data-p="${p.id}">Got it</button>`;
-    if (p.paid != null && r.owed > SLACK) acts += `<button type="button" class="btn sm ghost" data-act="waive" data-p="${p.id}">Let the ${fmt(r.owed)} go</button>`;
-    if (p.paid != null) acts += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${p.id}">Undo payment</button>`;
-    acts += `<button type="button" class="btn sm ghost" data-act="remove" data-p="${p.id}">Remove</button>`;
+    acts += `<button type="button" class="btn sm ghost" data-act="editfor" data-p="${p.id}">Edit items</button>`;
+    if (!isMe && !r.settled && r.owed > SLACK) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind privately</button>`;
+    if (!isMe) {
+      if (!r.settled && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;
+      if (p.paid != null && !p.ok) more += `<button type="button" class="btn sm ghost" data-act="confirm" data-p="${p.id}">Got it</button>`;
+      if (p.paid != null && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="waive" data-p="${p.id}">Let the ${fmt(r.owed)} go</button>`;
+      if (p.paid != null) more += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${p.id}">Undo payment</button>`;
+      more += `<button type="button" class="btn sm ghost" data-act="remove" data-p="${p.id}">Remove</button>`;
+    }
   }
-  return `<details class="person" data-p="${p.id}" ${openPeople.has(p.id) ? 'open' : ''}>
-    <summary>${av(p)}<span class="p-name"><b>${esc(p.name)}</b><small class="${cls}">${esc(status)}</small></span><b class="money">${fmt(r.total)}</b></summary>
-    <div class="p-body">${linesHtml(r)}<div class="acts">${acts}</div></div></details>`;
+  return `<div class="card person-card${cls === 'due' && r.total ? ' due' : ''}${cls === 'done' ? ' done' : ''}">
+    <div class="pc-head">${av(p)}<span class="p-name"><b>${isMe ? 'You' : esc(p.name)}</b><small class="${cls}">${esc(status)}</small></span><b class="money pc-total">${fmt(r.total)}</b></div>
+    ${items}
+    ${r.locked ? '<p class="note">Locked when they paid, so later changes won’t move it.</p>' : ''}
+    ${acts ? `<div class="acts">${acts}${more ? `<details class="more-acts" data-p="${p.id}" ${openPeople.has(p.id) ? 'open' : ''}><summary class="btn sm ghost">More</summary><div class="acts">${more}</div></details>` : ''}</div>` : ''}
+  </div>`;
 }
+
 function linesHtml(r) {
   if (!r.lines.length) return '<p class="note">Nothing claimed yet.</p>';
   return `<ul class="lines">${r.lines.map((l) => `<li><span>${esc(l.label)}</span><span class="money">${fmt(l.amt)}</span></li>`).join('')}
@@ -497,6 +546,12 @@ function linesHtml(r) {
 function renderDock(C) {
   const dock = $('#dock');
   dock.hidden = false;
+  if (editFor && T.people[editFor]) {
+    const r = C.byId[editFor];
+    setHTML($('#dockIn'), `<div class="dock-sum" aria-live="polite"><span>${esc(nameOf(editFor))}’s total</span><strong class="money">${fmt(r.total)}</strong><small>Tax and tip included</small></div>
+      <button type="button" class="btn" data-act="editdone">Done</button>`);
+    return;
+  }
   const r = C.byId[me];
   let left, right = '';
   if (me === HOST) {
@@ -570,22 +625,11 @@ function renderSheet(C) {
       <form id="amountForm"><label class="sr" for="amount">Amount in dollars</label>
       <input id="amount" class="in money" inputmode="decimal" value="${dollars(Math.max(0, r.owed))}" autocomplete="off">
       <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${done('Cancel')}</div></form></div>`;
-  } else if (s.type === 'assign' || s.type === 'assignTo') {
-    if (s.type === 'assign') {
-      const it = T.items.find((x) => x.id === s.i); if (!it) { closeSheet(); return; }
-      setHTML(b, `<div class="sh"><h2 id="sheetTitle">Who had ${esc(it.name)}?</h2><p class="sub">They’ll see it on their total, marked as added by you.</p>
-        ${people().map((p) => `<div class="prow">${av(p)}<span class="grow">${p.id === me ? 'You' : esc(p.name)}</span><button type="button" class="btn sm ghost" data-act="give" data-p="${p.id}">Give it to them</button></div>`).join('')}
-        <div class="sh-foot">${done()}</div></div>`);
-    } else {
-      const p = T.people[s.p]; if (!p) { closeSheet(); return; }
-      const even = T.mode === 'even';
-      setHTML(b, `<div class="sh"><h2 id="sheetTitle">What did ${esc(p.name)} have?</h2><p class="sub">${even ? 'Untick anything they didn’t have.' : 'They’ll see these marked as added by you.'}</p>
-        ${T.items.map((it) => { const n = units(it.id, s.p); return `<div class="prow"><span class="grow">${esc(it.name)}${it.qty > 1 ? ` ×${it.qty}` : ''}</span>${
-          !even && it.qty > 1 && modeOf(it) === 'count'
-            ? `<span class="stepper"><button type="button" data-act="a-dec" data-i="${it.id}" aria-label="One fewer ${esc(it.name)} for ${esc(p.name)}" ${n <= 0 ? 'disabled' : ''}>−</button><output>${n}</output><button type="button" data-act="a-inc" data-i="${it.id}" aria-label="One more ${esc(it.name)} for ${esc(p.name)}">+</button></span>`
-            : `<button type="button" class="tick" data-act="a-toggle" data-i="${it.id}" aria-pressed="${n > 0}" aria-label="${esc(p.name)} had ${esc(it.name)}">${CHECK}</button>`}</div>`; }).join('')}
-        <div class="sh-foot">${done()}</div></div>`);
-    }
+  } else if (s.type === 'assign') {
+    const it = T.items.find((x) => x.id === s.i); if (!it) { closeSheet(); return; }
+    setHTML(b, `<div class="sh"><h2 id="sheetTitle">Who had ${esc(it.name)}?</h2><p class="sub">They’ll see it on their total, marked as added by you.</p>
+      ${people().map((p) => `<div class="prow">${av(p)}<span class="grow">${p.id === me ? 'You' : esc(p.name)}</span><button type="button" class="btn sm ghost" data-act="give" data-p="${p.id}">Give it to them</button></div>`).join('')}
+      <div class="sh-foot">${done()}</div></div>`);
   } else if (s.type === 'created') {
     setHTML(b, `<div class="sh"><h2 id="sheetTitle">Your tab is ready</h2>
       <p class="sub">Send the link to the group chat. Everyone taps their name, picks what they had and pays you.</p>
@@ -658,14 +702,15 @@ app.addEventListener('click', (e) => {
   const a = b.dataset.act;
   lastActivity = Date.now();
   if (a === 'pick') { setMe(b.dataset.p); toast(`Hi ${nameOf(b.dataset.p)}! Tap what you had.`); return; }
-  if (a === 'view') { view = b.dataset.v; renderAll(); return; }
+  if (a === 'view') { view = b.dataset.v; editFor = null; renderAll(); return; }
   const it = b.dataset.i && T.items.find((x) => x.id === b.dataset.i);
   if (a === 'item' && it) { openSheet({ type: 'item', i: it.id }); return; }
-  if (a === 'inc' && it) claimTap(it);
-  if (a === 'dec' && it) setUnits(it.id, me, units(it.id, me) - 1);
-  if (a === 'toggle' && it) setUnits(it.id, me, units(it.id, me) > 0 ? 0 : 1);
+  if (a === 'inc' && it) claimTap(it, who());
+  if (a === 'dec' && it) setUnits(it.id, who(), units(it.id, who()) - 1);
+  if (a === 'toggle' && it) setUnits(it.id, who(), units(it.id, who()) > 0 ? 0 : 1);
+  if (a === 'editfor') { editFor = b.dataset.p === me ? null : b.dataset.p; view = 'items'; renderAll(); window.scrollTo(0, 0); return; }
+  if (a === 'editdone') { editFor = null; view = 'people'; renderAll(); window.scrollTo(0, 0); return; }
   if (a === 'assign' && it) openSheet({ type: 'assign', i: it.id });
-  if (a === 'assignTo') openSheet({ type: 'assignTo', p: b.dataset.p });
   if (a === 'pool') act({ op: 'setup', pool: b.dataset.v === 'none' ? null : b.dataset.v }, b.dataset.v === 'spread' ? 'Split across everyone who hasn’t paid' : b.dataset.v === 'cover' ? 'You’re covering it' : 'Undone');
   if (a === 'remind') remind(b.dataset.p);
   if (a === 'markpaid') openSheet({ type: 'markpaid', p: b.dataset.p });
@@ -680,7 +725,7 @@ app.addEventListener('click', (e) => {
 });
 app.addEventListener('toggle', (e) => {
   const d = e.target;
-  if (d.classList && d.classList.contains('person')) { if (d.open) openPeople.add(d.dataset.p); else openPeople.delete(d.dataset.p); }
+  if (d.classList && d.classList.contains('more-acts')) { if (d.open) openPeople.add(d.dataset.p); else openPeople.delete(d.dataset.p); }
 }, true);
 app.addEventListener('submit', async (e) => {
   if (!tabId || !T) return;
@@ -703,6 +748,7 @@ $('#dockIn').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   if (b.dataset.act === 'mine') openSheet({ type: 'mine' });
   if (b.dataset.act === 'share') shareLink();
+  if (b.dataset.act === 'editdone') { editFor = null; view = 'people'; renderAll(); window.scrollTo(0, 0); }
 });
 $('#sheetBody').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !sheet) return;
@@ -723,12 +769,6 @@ $('#sheetBody').addEventListener('click', (e) => {
     if (a === 's-toggle') setUnits(it.id, pid, units(it.id, pid) > 0 ? 0 : 1);
     if (a === 's-inc') setUnits(it.id, pid, units(it.id, pid) + 1);
     if (a === 's-dec') setUnits(it.id, pid, units(it.id, pid) - 1);
-  }
-  if (s.type === 'assignTo') {
-    const it = T.items.find((x) => x.id === b.dataset.i); if (!it) return;
-    if (a === 'a-toggle') setUnits(it.id, s.p, units(it.id, s.p) > 0 ? 0 : 1);
-    if (a === 'a-inc') setUnits(it.id, s.p, units(it.id, s.p) + 1);
-    if (a === 'a-dec') setUnits(it.id, s.p, units(it.id, s.p) - 1);
   }
 });
 $('#sheetBody').addEventListener('submit', (e) => {

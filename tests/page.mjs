@@ -102,10 +102,13 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
   await nick.click(`[data-act="toggle"][data-i="${iid('Bloody Mary')}"]`);
   await nick.click(`[data-act="inc"][data-i="${iid('Von Stiehl Cherry Cider DRFT')}"]`);
   await nick.click('[data-act="view"][data-v="people"]');
-  await nick.click(`[data-act="assignTo"][data-p="${pid('Ben')}"]`);
-  await nick.click(`#sheetBody [data-act="a-toggle"][data-i="${iid('Large Hot Honey')}"]`);
-  await nick.click(`#sheetBody [data-act="a-toggle"][data-i="${iid('New Glarus Tailwagger DRFT')}"]`);
-  await nick.click('#sheetBody [data-act="close-sheet"]');
+  await nick.click(`[data-act="editfor"][data-p="${pid('Ben')}"]`);
+  assert.match(nick.text('#app'), /Editing Ben’s items/);
+  await nick.click(`[data-act="toggle"][data-i="${iid('Large Hot Honey')}"]`);
+  await nick.click(`[data-act="toggle"][data-i="${iid('New Glarus Tailwagger DRFT')}"]`);
+  assert.match(nick.text('#dockIn'), /Ben’s total/);
+  await nick.click('#dockIn [data-act="editdone"]');
+  assert.match(nick.text('#app'), /Large Hot Honey/); // shown on Ben's card in People
   await nick.settle();
   const T = raw();
   assert.equal(T.claims[iid('Large Hot Honey')][pid('Ben')], 1);
@@ -116,6 +119,15 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
 // ---------- Anna opens the group link ----------
 const anna = await phone('/t/PLACEHOLDER'.replace('PLACEHOLDER', tabId));
 let annaOwed;
+await step('the items page separates what needs someone from what is claimed, with names', async () => {
+  await nick.click('[data-act="view"][data-v="items"]');
+  const groups = [...nick.w.document.querySelectorAll('h2.group')].map((h) => h.textContent.replace(/\s+/g, ' ').trim());
+  assert.match(groups[0], /^Needs someone/);
+  assert.match(groups[1], /^Claimed/);
+  assert.match(nick.text('#app'), /Ben/);
+  await nick.click('[data-act="view"][data-v="people"]');
+});
+
 await step('Anna sees the names Nick added and taps hers', async () => {
   assert.match(anna.text('#app'), /Who are you\?/);
   assert.match(anna.text('#app'), /Anna/);
@@ -178,7 +190,7 @@ await step('"I paid another way" records $40, not the full amount', async () => 
 // ---------- Nick, back on his host link, settles the rest ----------
 const nick2 = await phone(`/t/${tabId}#h=${hostKey}`);
 await step('the host link restores the host view', async () => {
-  assert.match(nick2.text('#app'), /Not covered yet/);
+  assert.match(nick2.text('#app'), /1 item needs someone/);
   assert.match(nick2.text('#app'), /Diet Coke/);
 });
 await step('Nick gives the Diet Coke to Ben and lets Ben’s remainder go', async () => {

@@ -198,6 +198,12 @@ await test('to the cent on 3,000 random tabs, with locks, leftovers and both mod
   }
 });
 
+await test('a count repeated in the item name is dropped', async () => {
+  const c = await post({ op: 'create', hostName: 'Nick', items: [{ name: '3 Door County Cherry Mojito', qty: 3, cents: 3000 }, { name: '7 Up', qty: 1, cents: 300 }], charge: 3600 });
+  assert.equal(c.state.items[0].name, 'Door County Cherry Mojito');
+  assert.equal(c.state.items[1].name, '7 Up');
+});
+
 await test('apportion always adds up', async () => {
   assert.deepEqual(apportion(100, [1, 1, 1]), [34, 33, 33]);
   assert.deepEqual(apportion(5, [0, 0]), [3, 2]);

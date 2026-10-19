@@ -16,7 +16,15 @@ export function people(T) {
 
 export const itemsTotal = (T) => (T.items || []).reduce((s, it) => s + it.cents, 0);
 
-function lineLabel(it, m, u, n, tot, even) {
+// Receipts often repeat the count in the name ("3 Door County Cherry Mojito" ×3).
+export function tidyName(name, qty) {
+  const s = String(name || '').trim();
+  const m = s.match(/^(\d+)\s*[x×]?\s+(.+)$/i);
+  return m && Number(m[1]) === qty && qty > 1 ? m[2] : s;
+}
+
+function lineLabel(item, m, u, n, tot, even) {
+  const it = { ...item, name: tidyName(item.name, item.qty) };
   if (m === 'count' && tot <= it.qty) return it.qty > 1 ? `${it.name} ×${u}` : it.name;
   if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on the receipt)`;
   if (n === 1) return it.name;

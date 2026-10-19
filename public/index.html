@@ -141,6 +141,27 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .sh .sub{color:var(--muted);margin:0 0 12px;font-size:14.5px}
 .sh-foot{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 
+.group{display:flex;align-items:center;gap:8px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:20px 4px 8px}
+.count{font-size:13px;font-weight:800;border-radius:999px;padding:1px 9px;background:var(--field);color:var(--ink);letter-spacing:0}
+.count.warn{background:var(--warn-soft);color:var(--warn)}
+.count.ok{background:var(--ok-soft);color:var(--ok)}
+.st{font-weight:700}
+.st.warn{color:var(--warn)}
+.st.ok{color:var(--ok)}
+.who{color:var(--ink);font-weight:600}
+.banner.edit{display:flex;align-items:center;justify-content:space-between;gap:10px;background:color-mix(in srgb,var(--me) 14%,var(--card));color:var(--ink);position:sticky;top:64px;z-index:3}
+.card.attention{border-color:var(--warn);box-shadow:inset 4px 0 0 var(--warn)}
+.person-card{margin-bottom:0}
+.person-card.due{box-shadow:inset 4px 0 0 var(--warn)}
+.person-card.done{box-shadow:inset 4px 0 0 var(--ok)}
+.pc-head{display:flex;align-items:center;gap:10px}
+.pc-total{font-size:18px}
+.mini-items{list-style:none;padding:0;margin:10px 0 0 38px;font-size:14.5px}
+.mini-items li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
+.more-acts{display:inline-block}
+.more-acts > summary{list-style:none}
+.more-acts > summary::-webkit-details-marker{display:none}
+.more-acts[open]{display:block;width:100%}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
 .toast.show{opacity:1}
 .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--me);animation:sp 1s linear infinite;display:inline-block;vertical-align:middle}

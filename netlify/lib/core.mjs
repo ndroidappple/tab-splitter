@@ -4,7 +4,7 @@
 // receive; only the host's report reads it.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { HOST, compute, itemsTotal } from '../../public/split.mjs';
+import { HOST, compute, itemsTotal, tidyName } from '../../public/split.mjs';
 
 export { HOST, itemsTotal };
 const MAX_PEOPLE = 40;
@@ -55,7 +55,7 @@ function cleanItems(list, old = []) {
     ids.add(id);
     const qty = it.qty == null ? 1 : Number(it.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > 99) bad(`Check the quantity on line ${k + 1}`);
-    return { id, name: cleanName(it.name, 60), qty, cents: cents(it.cents, `the price on line ${k + 1}`) };
+    return { id, name: tidyName(cleanName(it.name, 60), qty), qty, cents: cents(it.cents, `the price on line ${k + 1}`) };
   });
 }
 function needPerson(T, p) {
