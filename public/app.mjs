@@ -82,7 +82,8 @@ function renderStart() {
         <input id="photo" type="file" accept="image/*" class="sr">
         <button type="button" class="btn ghost wide" data-act="type">Type the items instead</button>
       </div>
-      <p id="scanStatus" class="note" role="status" aria-live="polite">${S.busy ? '<span class="spin"></span> Reading the receipt…' : ''}</p>`;
+      <p id="scanStatus" class="note" role="status" aria-live="polite">${S.busy ? '<span class="spin"></span> Reading the receipt…' : ''}</p>
+      ${recentHtml()}`;
     $('#photo').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) scanPhoto(f); });
     return;
   }
@@ -259,7 +260,7 @@ app.addEventListener('click', (e) => {
    A tab
    ====================================================================== */
 let T = null;
-let view = 'items';
+let view = 'people';
 let editFor = null; // the host is editing this person's items
 const pend = new Map(); // even split: "item|person" -> 1 (in) or 0 (out), not yet saved
 let pendOps = []; // itemized: slot changes not yet saved, in order
@@ -299,11 +300,27 @@ function venmoUrl(c) {
   return `https://venmo.com/${encodeURIComponent(T.payer.venmo)}?txn=pay&amount=${(Math.round(c) / 100).toFixed(2)}&note=${note}&audience=private`;
 }
 
+// Tabs this phone has opened, newest first, so the start screen (and a home-screen app) can get back to them.
+function recent() { try { const r = JSON.parse(store.get('tab-recent') || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; } }
+function remember() {
+  const r = recent().filter((x) => x && x.id !== tabId);
+  const title = T.title || 'Tab';
+  const was = recent().find((x) => x && x.id === tabId);
+  if (was && was.title === title && was.host === isHost && was.closed === !!T.closed) return;
+  r.unshift({ id: tabId, title, host: isHost, closed: !!T.closed, at: Date.now() });
+  store.set('tab-recent', JSON.stringify(r.slice(0, 8)));
+}
+function recentHtml() {
+  const r = recent().filter((x) => x && /^[a-z0-9]{10}$/.test(x.id));
+  if (!r.length) return '';
+  return `<h2 class="group">Your tabs</h2><div class="card"><ul class="lines recent">${r.map((x) => `<li><a href="/t/${x.id}">${esc(x.title)}</a><span class="muted">${x.closed ? 'Closed' : x.host ? 'You paid' : ''}</span></li>`).join('')}</ul></div>`;
+}
 function accept(st) {
   if (!st || typeof st.rev !== 'number') return;
   if (T && st.rev < T.rev) return;
   st.items = (st.items || []).map((it) => Object.assign({}, it, { name: tidyName(it.name, it.qty) }));
   T = st;
+  remember();
   if (me && !T.people[me]) { me = null; store.set('tab-me:' + tabId, null); toast('You’re no longer on this tab. Pick your name again.'); }
   renderAll();
 }
@@ -549,7 +566,7 @@ function peoplePanel(C) {
   }
 
   html += `<h2 class="group">People <span class="count">${others.length + 1}</span></h2>
-    <div class="stack">${[C.byId[HOST], ...others].map((r) => personCard(r)).join('')}</div>
+    <div class="stack">${(me && me !== HOST && C.byId[me] ? [C.byId[me], C.byId[HOST], ...others.filter((r) => r.p.id !== me)] : [C.byId[HOST], ...others]).map((r) => personCard(r)).join('')}</div>
     ${T.closed || !isHost ? '' : `<form id="addPerson" class="row2" style="margin-top:12px" autocomplete="off"><label class="sr" for="addPersonName">Add someone</label>
       <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>`}`;
 
@@ -558,6 +575,7 @@ function peoplePanel(C) {
   html += `<h2 class="group">Tab</h2><div class="card"><div class="acts" style="margin-top:0">
     <button type="button" class="btn sm ghost" data-act="share">Share the link</button>
     <button type="button" class="btn sm ghost" data-act="report">See the report</button>
+    <a class="btn sm ghost" href="/">Start a new tab</a>
     ${/^deploy-preview-/.test(location.hostname) ? `<a class="btn sm" href="${LIVE}/t/${tabId}#h=${encodeURIComponent(hostKey)}">Open on the live site</a>` : ''}
     ${T.closed ? '<button type="button" class="btn sm ghost" data-act="reopen">Reopen</button>'
     : `<button type="button" class="btn sm${allDone ? '' : ' ghost'}" data-act="close" ${allDone ? '' : 'aria-describedby="closeNote"'}>Close the tab</button>`}</div>
@@ -575,7 +593,7 @@ function personCard(r) {
   let more = '';
   if (!T.closed && !isHost) {
     if (p.id === me) {
-      acts += `<button type="button" class="btn sm ghost" data-act="editdone">Edit my items</button>`;
+      acts += `<button type="button" class="btn sm ghost" data-act="editdone">${r.lines.length ? 'Edit my items' : 'Add my items'}</button>`;
       if (r.owed > SLACK && !r.settled) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
     }
   } else if (!T.closed) {
@@ -758,7 +776,7 @@ function setMe(id, fromLink) {
   me = id;
   store.set('tab-me:' + tabId, id);
   if (id) beacon({ op: 'pick', p: id });
-  if (!isHost) view = 'items';
+  view = 'people';
   if (!fromLink) { renderAll(); window.scrollTo(0, 0); }
 }
 async function shareText(text, msg) {
