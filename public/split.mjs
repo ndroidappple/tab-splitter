@@ -23,12 +23,41 @@ export function tidyName(name, qty) {
   return m && Number(m[1]) === qty && qty > 1 ? m[2] : s;
 }
 
-function lineLabel(item, m, u, n, tot, even) {
-  const it = { ...item, name: tidyName(item.name, item.qty) };
-  if (m === 'count' && tot <= it.qty) return it.qty > 1 ? `${it.name} ×${u}` : it.name;
-  if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on the receipt)`;
-  if (n === 1) return it.name;
-  return even ? `${it.name}, split ${n} ways` : `${it.name}, ${u} of ${tot} shares`;
+// Every item is a row of slots, one per unit on the receipt ("Fish and Chips ×2"
+// has 2). Each slot holds the people who had that one: one person, a few who
+// shared it, or nobody yet. A slot's price is split evenly among its people.
+// Tabs saved before slots existed are read from their old per-person counts.
+export function slotsOf(T, it) {
+  const saved = T.slots && T.slots[it.id];
+  if (Array.isArray(saved)) {
+    return Array.from({ length: it.qty }, (_, k) => (Array.isArray(saved[k]) ? saved[k].filter((p) => T.people[p]) : []));
+  }
+  const out = Array.from({ length: it.qty }, () => []);
+  const c = (T.claims && T.claims[it.id]) || {};
+  const ids = people(T).map((p) => p.id).filter((p) => c[p] > 0);
+  const shared = it.qty < 2 || (T.modes && T.modes[it.id] === 'share');
+  if (shared) out.forEach((slot) => slot.push(...ids));
+  else {
+    let k = 0;
+    for (const p of ids) for (let u = 0; u < c[p] && k < it.qty; u++) out[k++].push(p);
+  }
+  return out;
+}
+
+// "Fish and Chips", "Carbliss ×4", "Cheese Curds ×2, split 4 ways", "Fish and Chips, split with Haven"
+function slotLabel(it, slots, p, nameOf) {
+  const name = tidyName(it.name, it.qty);
+  const solo = slots.filter((s) => s.length === 1 && s[0] === p).length;
+  const shared = slots.filter((s) => s.length > 1 && s.includes(p));
+  if (!shared.length) return it.qty > 1 ? `${name} ×${solo}` : name;
+  let how;
+  if (shared.length === 1 && shared[0].length === 2) how = `split with ${nameOf(shared[0].find((x) => x !== p))}`;
+  else {
+    const sizes = new Set(shared.map((s) => s.length));
+    how = sizes.size === 1 ? `split ${[...sizes][0]} ways` : 'shared';
+  }
+  if (solo) return `${name} ×${solo}, plus ${shared.length > 1 ? `${shared.length} ` : 'one '}${how}`;
+  return `${name}${shared.length > 1 ? ` ×${shared.length}` : ''}, ${how}`;
 }
 
 // Splits `target` cents across `weights` so the parts add up exactly
@@ -47,42 +76,46 @@ export function apportion(target, weights) {
   return base;
 }
 
-// Works out what everyone owes. The page passes `units`, `modeOf` and `isOut`
-// so taps that haven't synced yet show right away; the server uses saved state.
+// Works out what everyone owes. The page passes its own view of the tab (with
+// taps that haven't synced yet) and `isOut`; the server uses saved state.
 export function compute(T, opts = {}) {
-  const units = opts.units || ((i, p) => (T.claims && T.claims[i] && T.claims[i][p]) || 0);
   const isOut = opts.isOut || ((i, p) => !!(T.out && T.out[i] && T.out[i][p]));
-  const modeOf = opts.modeOf || ((it) => (it.qty < 2 ? 'share' : (T.modes && T.modes[it.id]) || 'count'));
   const even = T.mode === 'even';
   const ppl = people(T);
   const byId = {};
   ppl.forEach((p) => { byId[p.id] = { p, sub: 0, lines: [] }; });
+  const nameOf = (id) => (T.people[id] ? T.people[id].name : '');
   const info = {};
   let claimed = 0;
   for (const it of T.items || []) {
-    const m = even ? 'share' : modeOf(it);
-    const ent = even
-      ? ppl.filter((p) => !isOut(it.id, p.id)).map((p) => [p.id, 1])
-      : ppl.map((p) => [p.id, units(it.id, p.id)]).filter(([, u]) => u > 0);
-    const tot = ent.reduce((s, [, u]) => s + u, 0);
     const out = {};
-    let c = 0, over = 0, left;
-    if (!ent.length) left = m === 'count' ? it.qty : 1;
-    else if (m === 'count' && tot <= it.qty) {
-      const unit = it.cents / it.qty;
-      ent.forEach(([p, u]) => { out[p] = u * unit; });
-      c = tot * unit; left = it.qty - tot;
+    let slots, filled;
+    if (even) {
+      const ins = ppl.filter((p) => !isOut(it.id, p.id)).map((p) => p.id);
+      slots = [ins];
+      ins.forEach((p) => { out[p] = it.cents / ins.length; });
+      filled = ins.length ? it.qty : 0;
     } else {
-      ent.forEach(([p, u]) => { out[p] = (it.cents * u) / tot; });
-      c = it.cents; left = 0;
-      if (m === 'count') over = tot - it.qty;
+      slots = slotsOf(T, it);
+      const unit = it.cents / it.qty;
+      filled = 0;
+      for (const s of slots) {
+        if (!s.length) continue;
+        filled++;
+        s.forEach((p) => { out[p] = (out[p] || 0) + unit / s.length; });
+      }
     }
-    const same = ent.every(([, u]) => u === (ent[0] || [0, 0])[1]);
-    info[it.id] = { m, ent, tot, out, c, over, left, done: ent.length > 0 && left === 0 };
+    const ent = ppl.filter((p) => out[p.id] != null).map((p) => [p.id, slots.filter((s) => s.includes(p.id)).length]);
+    const left = even ? (ent.length ? 0 : 1) : it.qty - filled;
+    const c = even ? (ent.length ? it.cents : 0) : (filled * it.cents) / it.qty;
+    info[it.id] = { slots, ent, out, c, left, filled, done: ent.length > 0 && left === 0 };
     claimed += c;
-    ent.forEach(([p, u]) => {
+    ent.forEach(([p]) => {
       byId[p].sub += out[p];
-      byId[p].lines.push({ item: it.id, label: lineLabel(it, m, u, ent.length, tot, same), amt: out[p] });
+      const label = even
+        ? (ent.length === 1 ? tidyName(it.name, it.qty) : `${tidyName(it.name, it.qty)}, split ${ent.length} ways`)
+        : slotLabel(it, slots, p, nameOf);
+      byId[p].lines.push({ item: it.id, label, amt: out[p] });
     });
   }
 

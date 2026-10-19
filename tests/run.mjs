@@ -66,15 +66,16 @@ await test('unknown tabs are a clean 404', async () => {
 await post({ t, op: 'event', type: 'link_opened', device: 'annaphone1' });
 await post({ t, op: 'pick', p: anna, device: 'annaphone1' });
 later(1);
-await post({ t, op: 'mode', i: item('Fried Cheese Curds'), m: 'share', actor: anna });
-await post({ t, op: 'claims', actor: anna, changes: [
-  { i: item('Large Margherita'), p: anna, u: 1 }, { i: item('Von Stiehl Cherry Cider DRFT'), p: anna, u: 1 },
-  { i: item('Fried Cheese Curds'), p: anna, u: 1 }, { i: item('Fried Cheese Curds'), p: HOST, u: 1 },
+await post({ t, op: 'slots', actor: anna, changes: [
+  { a: 'take', i: item('Large Margherita'), p: anna }, { a: 'take', i: item('Von Stiehl Cherry Cider DRFT'), p: anna },
+  { a: 'join', i: item('Fried Cheese Curds'), k: 0, p: anna }, { a: 'join', i: item('Fried Cheese Curds'), k: 0, p: HOST },
 ] });
-await post({ t, op: 'claims', key, changes: [
-  { i: item('Large Sausage & Pesto'), p: HOST, u: 1 }, { i: item('Von Stiehl Cherry Cider DRFT'), p: HOST, u: 1 }, { i: item('Bloody Mary'), p: HOST, u: 1 },
+// Both orders of curds were shared by Anna and Nick
+await post({ t, op: 'shareAll', i: item('Fried Cheese Curds'), ps: [anna, HOST], actor: anna });
+await post({ t, op: 'slots', key, changes: [
+  { a: 'take', i: item('Large Sausage & Pesto'), p: HOST }, { a: 'take', i: item('Von Stiehl Cherry Cider DRFT'), p: HOST }, { a: 'take', i: item('Bloody Mary'), p: HOST },
   // Ben left early; the host claims for him.
-  { i: item('Large Hot Honey'), p: ben, u: 1 }, { i: item('New Glarus Tailwagger DRFT'), p: ben, u: 1 },
+  { a: 'take', i: item('Large Hot Honey'), p: ben }, { a: 'take', i: item('New Glarus Tailwagger DRFT'), p: ben },
 ] });
 
 await test('host-added items are marked as added by the host', async () => {
@@ -105,7 +106,7 @@ await post({ t, op: 'paid', p: anna, amount: annaTotal, actor: anna });
 
 await test('paying locks the total: a later change to a shared item does not move it', async () => {
   // Ben turns out to have shared the curds too (host adds him)
-  await post({ t, op: 'claims', key, changes: [{ i: item('Fried Cheese Curds'), p: ben, u: 1 }] });
+  await post({ t, op: 'shareAll', key, i: item('Fried Cheese Curds'), ps: [anna, HOST, ben] });
   const C = compute(await get(t));
   assert.equal(C.byId[anna].total, annaTotal);
   assert.equal(C.byId[anna].settled, true);
@@ -113,7 +114,7 @@ await test('paying locks the total: a later change to a shared item does not mov
 });
 
 await test('the Diet Coke can be assigned, then nothing is left on the payer', async () => {
-  await post({ t, op: 'claims', key, changes: [{ i: item('Diet Coke'), p: ben, u: 1 }] });
+  await post({ t, op: 'slots', key, changes: [{ a: 'take', i: item('Diet Coke'), p: ben }] });
   const C = compute(await get(t));
   assert.equal(C.openItems.length, 0);
   // Anna's lock leaves the curds drift in the pool; spreading it settles the rest exactly.
@@ -180,12 +181,14 @@ await test('to the cent on 3,000 random tabs, with locks, leftovers and both mod
     for (let i = 0; i < k; i++) T.people['p' + i] = { name: 'P' + i, t: i + 1, paid: null, lock: null };
     const ids = Object.keys(T.people);
     const full = rnd() < .5;
+    T.slots = {};
     for (const it of items) {
-      if (it.qty > 1 && rnd() < .3) T.modes[it.id] = 'share';
-      const c = {};
-      if (full) for (let u = 0; u < it.qty; u++) { const p = ids[Math.floor(rnd() * ids.length)]; c[p] = (c[p] || 0) + 1; }
-      else for (const p of ids) if (rnd() < .2) c[p] = 1 + Math.floor(rnd() * 3);
-      if (Object.keys(c).length) T.claims[it.id] = c;
+      // each slot: nobody, one person, or a few who shared it
+      T.slots[it.id] = Array.from({ length: it.qty }, () => {
+        if (!full && rnd() < .4) return [];
+        const n = rnd() < .75 ? 1 : 2 + Math.floor(rnd() * 3);
+        return [...new Set(Array.from({ length: n }, () => ids[Math.floor(rnd() * ids.length)]))];
+      });
       if (T.mode === 'even') for (const p of ids) if (rnd() < .15) (T.out[it.id] ||= {})[p] = true;
     }
     for (const p of ids.slice(1)) if (rnd() < .25) { T.people[p].lock = Math.floor(rnd() * 5000); T.people[p].paid = T.people[p].lock; }
@@ -202,6 +205,43 @@ await test('a count repeated in the item name is dropped', async () => {
   const c = await post({ op: 'create', hostName: 'Nick', items: [{ name: '3 Door County Cherry Mojito', qty: 3, cents: 3000 }, { name: '7 Up', qty: 1, cents: 300 }], charge: 3600 });
   assert.equal(c.state.items[0].name, 'Door County Cherry Mojito');
   assert.equal(c.state.items[1].name, '7 Up');
+});
+
+await test('one plate split within a count: Ryan has one fish and chips, Haven and Christina share the other', async () => {
+  const c = await post({ op: 'create', hostName: 'Nick', items: [{ name: 'Fish and Chips', qty: 2, cents: 3390 }], charge: 3390, people: ['Ryan', 'Haven', 'Christina'] });
+  const id = c.id, k = c.hostKey, s = c.state;
+  const p = (n) => Object.entries(s.people).find(([, v]) => v.name === n)[0];
+  const fish = s.items[0].id;
+  await post({ t: id, op: 'slots', actor: p('Ryan'), changes: [{ a: 'take', i: fish, p: p('Ryan') }] });
+  await post({ t: id, op: 'slots', actor: p('Haven'), changes: [{ a: 'take', i: fish, p: p('Haven') }] });
+  await post({ t: id, op: 'slots', actor: p('Christina'), changes: [{ a: 'join', i: fish, k: 1, p: p('Christina') }] });
+  const T = await (await handle(new Request('https://x/api/tab?t=' + id), store, now)).json();
+  const C = compute(T);
+  assert.deepEqual(T.slots[fish], [[p('Ryan')], [p('Haven'), p('Christina')]]);
+  assert.equal(C.byId[p('Ryan')].total, 1695);
+  assert.equal(C.byId[p('Haven')].total + C.byId[p('Christina')].total, 1695);
+  assert.ok(Math.abs(C.byId[p('Haven')].total - C.byId[p('Christina')].total) <= 1);
+  assert.equal(C.allClaimed, true);
+  assert.equal(C.byId[p('Haven')].lines[0].label, 'Fish and Chips, split with Christina');
+  // Nobody can take a third one
+  const r = await post({ t: id, op: 'slots', key: k, changes: [{ a: 'take', i: fish, p: HOST }] });
+  assert.equal(r.status, 400);
+});
+
+await test('tabs saved with the old per-person counts turn into slots', async () => {
+  const s2 = fakeStore();
+  const old = { v: 2, id: 'abcdefghij', rev: 4, hostKeyHash: 'x', title: 'Old', payer: { name: 'Nick', venmo: '' }, mode: 'items', charge: 4200,
+    items: [{ id: 'k', name: 'Carbliss', qty: 7, cents: 4200 }, { id: 'c', name: 'Curds', qty: 3, cents: 2685 }],
+    people: { host: { name: 'Nick', t: 0 }, a: { name: 'Anna', t: 1 } }, claims: { k: { host: 4, a: 2 }, c: { host: 1, a: 1 } }, modes: { c: 'share' }, out: {}, by: {}, log: [] };
+  await s2.setJSON(keyFor('abcdefghij'), old);
+  const before = compute(old);
+  await handle(new Request('https://x/api/tab', { method: 'POST', body: JSON.stringify({ t: 'abcdefghij', op: 'join', name: 'Cal' }) }), s2, now);
+  const T = s2.raw(keyFor('abcdefghij'));
+  assert.deepEqual(T.slots.k, [['host'], ['host'], ['host'], ['host'], ['a'], ['a'], []]);
+  assert.deepEqual(T.slots.c, [['host', 'a'], ['host', 'a'], ['host', 'a']]);
+  const after = compute(T);
+  assert.equal(after.byId.host.total, before.byId.host.total);
+  assert.equal(after.byId.a.total, before.byId.a.total);
 });
 
 await test('apportion always adds up', async () => {

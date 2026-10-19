@@ -4,7 +4,7 @@
 // receive; only the host's report reads it.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { HOST, compute, itemsTotal, tidyName } from '../../public/split.mjs';
+import { HOST, compute, itemsTotal, tidyName, slotsOf } from '../../public/split.mjs';
 
 export { HOST, itemsTotal };
 const MAX_PEOPLE = 40;
@@ -81,6 +81,14 @@ function addPerson(T, name, now, addedBy) {
 function pruneItem(T, i) {
   for (const map of [T.claims, T.by, T.out]) if (map[i] && !Object.keys(map[i]).length) delete map[i];
 }
+// Tabs saved before slots existed keep per-person counts; turn them into slots once.
+export function migrate(T) {
+  if (T.slots) return;
+  T.slots = {};
+  for (const it of T.items || []) T.slots[it.id] = slotsOf(T, it);
+  T.claims = {};
+  T.modes = {};
+}
 
 // ---------- Event log ----------
 const cleanDevice = (v) => (typeof v === 'string' && /^[a-z0-9]{4,24}$/.test(v) ? v : undefined);
@@ -90,6 +98,15 @@ export function log(T, now, type, data = {}) {
   for (const [k, v] of Object.entries(data)) if (v !== undefined) e[k] = v;
   T.log.push(e);
   if (T.log.length > MAX_LOG) T.log.splice(0, T.log.length - MAX_LOG);
+}
+
+// Remembers who added someone to an item, so they see "Added by Nick".
+function setBy(T, i, p, by, slots) {
+  T.by[i] = T.by[i] || {};
+  const has = slots.some((x) => x.includes(p));
+  if (!has || !by || by === p) delete T.by[i][p];
+  else T.by[i][p] = by;
+  pruneItem(T, i);
 }
 
 // ---------- Creating a tab ----------
@@ -106,6 +123,7 @@ export function createTab(body, now) {
     mode: body.mode === 'even' ? 'even' : 'items',
     items, charge,
     people: {}, claims: {}, out: {}, by: {}, modes: {}, pool: null, log: [],
+    slots: Object.fromEntries(items.map((it) => [it.id, Array.from({ length: it.qty }, () => [])])),
   };
   T.people[HOST] = { name: T.payer.name, color: 0, t: 0, by: 'self', paid: null, lock: null, ok: false, waived: 0 };
   const names = Array.isArray(body.people) ? body.people.slice(0, MAX_PEOPLE - 1) : [];
@@ -130,6 +148,7 @@ export function apply(T, body, now = Date.now()) {
   const isHost = typeof body.key === 'string' && body.key.length > 0 && hash(body.key) === T.hostKeyHash;
   if (body.op === 'event') return phoneEvent(T, body, now);
   if (T.closed && !(isHost && body.op === 'reopen')) bad('This tab is closed');
+  migrate(T);
   const before = summary(T);
   const r = change(T, body, now, isHost);
   if (r.changed) {
@@ -183,7 +202,7 @@ function change(T, body, now, isHost) {
         const it = c && T.items.find((x) => x.id === c.i);
         if (!it) bad('That item is no longer on the tab');
         needPerson(T, c.p);
-        if (T.mode === 'even') {
+        if (T.mode !== 'even') bad('This page is out of date. Refresh it and try again.');
           // In an even split, a claim means staying in (1) or stepping out (0).
           const outNow = !!(T.out[c.i] && T.out[c.i][c.p]);
           const wantOut = Number(c.u) === 0;
@@ -194,28 +213,49 @@ function change(T, body, now, isHost) {
             if (by && by !== c.p) T.by[c.i][c.p] = by; else delete T.by[c.i][c.p];
             log(T, now, 'claim', { item: c.i, person: c.p, from: outNow ? 0 : 1, to: wantOut ? 0 : 1, by });
           }
-        } else {
-          const u = Number(c.u);
-          if (!Number.isInteger(u) || u < 0 || u > 99) bad('Counts must be between 0 and 99');
-          T.claims[c.i] = T.claims[c.i] || {};
-          T.by[c.i] = T.by[c.i] || {};
-          const from = T.claims[c.i][c.p] || 0;
-          if (u === 0) { delete T.claims[c.i][c.p]; delete T.by[c.i][c.p]; } else {
-            T.claims[c.i][c.p] = u;
-            if (by && by !== c.p) T.by[c.i][c.p] = by; else delete T.by[c.i][c.p];
-          }
-          if (from !== u) log(T, now, 'claim', { item: c.i, person: c.p, from, to: u, by });
-        }
         pruneItem(T, c.i);
       }
       return { changed: true };
     }
-    case 'mode': {
+    case 'slots': {
+      // Itemized tabs: take an open slot, join someone's (shared it), or leave one.
+      if (T.mode === 'even') bad('This page is out of date. Refresh it and try again.');
+      const ch = body.changes;
+      if (!Array.isArray(ch) || !ch.length || ch.length > 200) bad('No changes sent');
+      for (const c of ch) {
+        const it = c && T.items.find((x) => x.id === c.i);
+        if (!it) bad('That item is no longer on the tab');
+        needPerson(T, c.p);
+        const sl = slotsOf(T, it);
+        let k = Number(c.k);
+        if (c.a === 'take') {
+          k = sl.findIndex((x) => !x.length);
+          if (k < 0) bad(`All ${it.qty} ${it.name} are taken. Tap one to share it.`);
+          sl[k] = [c.p];
+        } else if (c.a === 'join' || c.a === 'leave') {
+          if (!Number.isInteger(k) || k < 0 || k >= it.qty) bad('That one is no longer on the tab');
+          const had = sl[k].includes(c.p);
+          if (c.a === 'join' && !had) sl[k].push(c.p);
+          else if (c.a === 'leave' && had) sl[k] = sl[k].filter((x) => x !== c.p);
+          else continue;
+        } else bad('Unknown change');
+        T.slots[it.id] = sl;
+        setBy(T, it.id, c.p, by, sl);
+        log(T, now, 'claim', { item: it.id, person: c.p, slot: k, from: c.a === 'leave' ? 1 : 0, to: c.a === 'leave' ? 0 : 1, by });
+      }
+      return { changed: true };
+    }
+    case 'shareAll': {
+      // The same people shared every one (cheese curds for the table).
       const it = T.items.find((x) => x.id === body.i);
-      if (!it || it.qty < 2) bad('That item is no longer on the tab');
-      if (!['count', 'share'].includes(body.m)) bad('Unknown split type');
-      T.modes[body.i] = body.m;
-      log(T, now, 'mode', { item: body.i, mode: body.m, by });
+      if (!it) bad('That item is no longer on the tab');
+      if (!Array.isArray(body.ps) || body.ps.length > 40) bad('Pick who shared it');
+      const ps = [...new Set(body.ps)];
+      ps.forEach((p) => needPerson(T, p));
+      const before = slotsOf(T, it);
+      T.slots[it.id] = Array.from({ length: it.qty }, () => ps.slice());
+      for (const p of new Set([...ps, ...before.flat()])) setBy(T, it.id, p, by, T.slots[it.id]);
+      log(T, now, 'claim', { item: it.id, shared_by: ps.length, by, from: before.filter((x) => x.length).length, to: ps.length ? it.qty : 0 });
       return { changed: true };
     }
     case 'paid': {
@@ -266,6 +306,7 @@ function change(T, body, now, isHost) {
       if (body.p === HOST) bad('The host can’t be removed');
       delete T.people[body.p];
       for (const map of [T.claims, T.out, T.by]) for (const i of Object.keys(map)) { delete map[i][body.p]; pruneItem(T, i); }
+      for (const i of Object.keys(T.slots || {})) T.slots[i] = T.slots[i].map((x) => x.filter((q) => q !== body.p));
       log(T, now, 'removed', { person: body.p });
       return { changed: true };
     }
@@ -287,6 +328,7 @@ function change(T, body, now, isHost) {
       if (!fields.length) bad('Nothing to change');
       if (body.items !== undefined) {
         T.items = cleanItems(body.items, T.items);
+        T.slots = Object.fromEntries(T.items.map((it) => [it.id, slotsOf(T, it)]));
         const ids = new Set(T.items.map((i) => i.id));
         for (const map of [T.claims, T.out, T.by, T.modes]) for (const i of Object.keys(map)) if (!ids.has(i)) delete map[i];
       }

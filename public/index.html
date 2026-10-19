@@ -170,6 +170,9 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .slot.taken{border:0;background:var(--pc);color:#fff;opacity:.55}
 .slot.mine{border:3px solid var(--card);background:var(--pc);color:#fff;box-shadow:0 0 0 2px var(--pc)}
 .slot:disabled{cursor:default}
+.slot.shared{font-size:12.5px;letter-spacing:-.02em}
+.slot.picked{outline:3px solid var(--ink);outline-offset:2px}
+.sheet-slots{padding:0 0 12px}
 .slot-extra{color:var(--warn);font-weight:700;font-size:13.5px}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
 .toast.show{opacity:1}

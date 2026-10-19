@@ -1,5 +1,5 @@
 // The tab page: start a tab (host), claim and pay (friends), and the host's panel.
-import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName } from './split.mjs';
+import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName, slotsOf } from './split.mjs';
 
 const API = '/api/tab';
 const PALETTE = ['#2F5BD3', '#0E8A5C', '#C2410C', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#A16207', '#4338CA', '#0F766E', '#9D174D', '#475569'];
@@ -260,8 +260,8 @@ app.addEventListener('click', (e) => {
 let T = null;
 let view = 'items';
 let editFor = null; // the host is editing this person's items
-const pend = new Map(); // "item|person" -> units not yet saved
-const pendModes = new Map();
+const pend = new Map(); // even split: "item|person" -> 1 (in) or 0 (out), not yet saved
+let pendOps = []; // itemized: slot changes not yet saved, in order
 const openPeople = new Set();
 let sheet = null;
 let lastActivity = Date.now();
@@ -270,13 +270,26 @@ let payReturn = null; // { amt } while someone is off in Venmo
 function units(i, p) {
   const k = i + '|' + p;
   if (pend.has(k)) return pend.get(k);
-  if (T.mode === 'even') return T.out && T.out[i] && T.out[i][p] ? 0 : 1;
-  return (T.claims[i] && T.claims[i][p]) || 0;
+  return T.out && T.out[i] && T.out[i][p] ? 0 : 1;
 }
 const isOut = (i, p) => units(i, p) === 0;
-const modeOf = (it) => (it.qty < 2 ? 'share' : pendModes.get(it.id) || (T.modes && T.modes[it.id]) || 'count');
+// The tab as this phone sees it: saved slots plus taps that haven't synced yet.
+function viewT() {
+  if (!pendOps.length || T.mode === 'even') return T;
+  const slots = {};
+  for (const it of T.items) slots[it.id] = slotsOf(T, it).map((x) => x.slice());
+  for (const c of pendOps) {
+    const sl = slots[c.i]; if (!sl) continue;
+    if (c.a === 'take') { const k = sl.findIndex((x) => !x.length); if (k >= 0) sl[k] = [c.p]; }
+    if (c.a === 'join' && sl[c.k] && !sl[c.k].includes(c.p)) sl[c.k].push(c.p);
+    if (c.a === 'leave' && sl[c.k]) sl[c.k] = sl[c.k].filter((x) => x !== c.p);
+  }
+  return Object.assign({}, T, { slots });
+}
+const slotsNow = (it) => slotsOf(viewT(), it);
+const count = (it, p) => (T.mode === 'even' ? units(it.id, p) : slotsNow(it).filter((x) => x.includes(p)).length);
 const people = () => peopleOf(T);
-const compute_ = () => compute(T, { units, modeOf, isOut });
+const compute_ = () => compute(viewT(), { isOut });
 const nameOf = (p) => (T.people[p] ? T.people[p].name : 'Someone');
 function personalLink(p) { return `${location.origin}/t/${tabId}?p=${p}`; }
 function venmoUrl(c) {
@@ -297,15 +310,23 @@ let flushT = null, flushing = false;
 function scheduleFlush(ms = 250) { clearTimeout(flushT); flushT = setTimeout(flush, ms); }
 async function flush() {
   if (flushing) { scheduleFlush(150); return; }
-  if (!pend.size) return;
-  const changes = [...pend].map(([k, u]) => { const [i, p] = k.split('|'); return { i, p, u }; });
+  if (!pend.size && !pendOps.length) return;
   flushing = true;
   try {
-    const r = await post(body({ op: 'claims', changes }));
-    changes.forEach((c) => { const k = c.i + '|' + c.p; if (pend.get(k) === c.u) pend.delete(k); });
-    accept(r.state);
+    if (pendOps.length) {
+      const sent = pendOps.slice();
+      const r = await post(body({ op: 'slots', changes: sent }));
+      pendOps = pendOps.slice(sent.length);
+      accept(r.state);
+    }
+    if (pend.size) {
+      const changes = [...pend].map(([k, u]) => { const [i, p] = k.split('|'); return { i, p, u }; });
+      const r = await post(body({ op: 'claims', changes }));
+      changes.forEach((c) => { const k = c.i + '|' + c.p; if (pend.get(k) === c.u) pend.delete(k); });
+      accept(r.state);
+    }
   } catch (e) {
-    if (e.status >= 400 && e.status < 500 && e.status !== 409) { pend.clear(); toast(e.message); await poll(true); }
+    if (e.status >= 400 && e.status < 500 && e.status !== 409) { pend.clear(); pendOps = []; toast(e.message); await poll(true); }
     else { if (e.status !== 409) online(false); scheduleFlush(e.status === 409 ? 400 : 3000); }
   } finally { flushing = false; }
 }
@@ -385,6 +406,7 @@ const who = () => (editFor && T.people[editFor] ? editFor : me);
 const shortName = (p) => (p === me ? 'You' : p === HOST ? T.payer.name : nameOf(p));
 
 // "Nick ×4, Anna ×3" or "Anna, Nick" or "Everyone but Ben"
+// "Nick ×4, Anna" or "Ryan, Haven & Christina" or "Everyone but Ben"
 function holders(it, inf) {
   if (!inf.ent.length) return '';
   if (T.mode === 'even') {
@@ -393,11 +415,15 @@ function holders(it, inf) {
     const outs = people().filter((p) => !inf.ent.some(([id]) => id === p.id)).map((p) => shortName(p.id));
     return outs.length <= 2 ? `Everyone but ${outs.join(' and ')}` : inf.ent.map(([id]) => shortName(id)).join(', ');
   }
-  return inf.ent.map(([id, u]) => (inf.m === 'count' && it.qty > 1 ? `${shortName(id)} ×${u}` : shortName(id))).join(', ');
+  const groups = new Map();
+  for (const sl of inf.slots) if (sl.length) { const k = sl.join('+'); groups.set(k, (groups.get(k) || 0) + 1); }
+  return [...groups].map(([k, n]) => {
+    const names = k.split('+').map(shortName);
+    const who_ = names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names.at(-1)}` : names[0];
+    return n > 1 ? `${who_} ×${n}` : who_;
+  }).join(', ');
 }
-function needsSomeone(it, inf) {
-  return T.mode === 'even' ? !inf.ent.length : (!inf.done || inf.over > 0);
-}
+const needsSomeone = (it, inf) => !inf.done;
 
 function itemsList(C) {
   const even = T.mode === 'even';
@@ -424,15 +450,13 @@ function itemsList(C) {
 
 function itemRowHtml(it, C, target) {
   const inf = C.info[it.id], even = T.mode === 'even';
-  const m = inf.m, myU = units(it.id, target), mine = myU > 0;
+  const mine = count(it, target) > 0;
   const forName = target === me ? '' : ` for ${nameOf(target)}`;
-  // Status line: what's left, then who has it
   let status;
-  if (inf.over > 0) status = `<span class="st warn">${inf.over} too many claimed</span>`;
-  else if (!inf.ent.length) status = `<span class="st warn">${even ? 'Nobody' : 'Unclaimed'}</span>`;
-  else if (!even && m === 'count' && it.qty > 1 && inf.left > 0) status = `<span class="st warn">${inf.left} of ${it.qty} left</span>`;
+  if (!inf.ent.length) status = `<span class="st warn">${even ? 'Nobody' : 'Unclaimed'}</span>`;
+  else if (!even && it.qty > 1 && inf.left > 0) status = `<span class="st warn">${inf.left} of ${it.qty} left</span>`;
   else status = '<span class="st ok">✓</span>';
-  const price = !even && m === 'count' && it.qty > 1 ? `${fmt(it.cents / it.qty)} each` : fmt(it.cents);
+  const price = !even && it.qty > 1 ? `${fmt(it.cents / it.qty)} each` : fmt(it.cents);
   const meta = [`<span class="money">${price}</span>`, status];
   const h = holders(it, inf);
   if (h) meta.push(`<span class="who">${esc(h)}</span>`);
@@ -440,37 +464,44 @@ function itemRowHtml(it, C, target) {
   const addedBy = T.by && T.by[it.id] && T.by[it.id][target];
   if (!editFor && addedBy && addedBy !== target && (mine || even)) meta.push(`<span class="tag">${even ? 'Changed' : 'Added'} by ${esc(shortName(addedBy))}</span>`);
   const name = esc(it.name);
-  if (!even && m === 'count' && it.qty > 1) {
+  if (!even && it.qty > 1) {
     return `<div class="row slotted${mine ? ' mine' : ''}"><div class="row-top">
-      <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had it">
+      <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had each one">
         <span class="r-name">${name} <span class="muted">×${it.qty}</span></span><span class="r-meta">${meta.join('')}</span></button>
-      ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Fix counts for ${name}">⋯</button>`}</div>
+      ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who had each ${name}">⋯</button>`}</div>
       ${slotsHtml(it, inf, target)}</div>`;
   }
   const ctl = T.closed ? ''
     : `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${name}${forName}">${CHECK}</button>`;
   return `<div class="row${mine ? ' mine' : ''}">
     <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had it">
-      <span class="r-name">${name}${it.qty > 1 ? ` <span class="muted">×${it.qty}</span>` : ''}</span><span class="r-meta">${meta.join('')}</span></button>
+      <span class="r-name">${name}</span><span class="r-meta">${meta.join('')}</span></button>
     ${ctl}
-    ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who had ${name}">⋯</button>`}</div>`;
+    ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who shared ${name}">⋯</button>`}</div>`;
 }
 
-// One slot per unit on the receipt, filled in people order: "N N N N A _ _".
+// One slot per unit on the receipt. A slot shows who had it: one initial, or
+// two for a shared one ("H C"), or "+" when it's open.
+function slotFace(ps) {
+  if (!ps.length) return { face: '+', style: '' };
+  const cols = ps.map((p) => pc(T.people[p]));
+  const style = cols.length === 1 ? `--pc:${cols[0]}` : `background:linear-gradient(135deg,${cols[0]} 50%,${cols[1]} 50%)`;
+  const face = ps.length === 1 ? initial(T.people[ps[0]].name) : ps.length === 2 ? ps.map((p) => initial(T.people[p].name)).join('') : `${initial(T.people[ps[0]].name)}+${ps.length - 1}`;
+  return { face: esc(face), style };
+}
 function slotsHtml(it, inf, target) {
-  const owners = [];
-  for (const p of people()) for (let k = 0; k < units(it.id, p.id); k++) owners.push(p.id);
-  const extra = Math.max(0, owners.length - it.qty);
   const name = esc(it.name);
-  const slots = Array.from({ length: it.qty }, (_, k) => {
-    const o = owners[k];
-    const label = o ? `${name} ${k + 1} of ${it.qty}: ${o === target ? (target === me ? 'yours, tap to give it back' : `${esc(nameOf(target))}’s, tap to remove`) : `${esc(shortName(o))}’s`}`
-      : `${name} ${k + 1} of ${it.qty}: open, tap to take it${target === me ? '' : ` for ${esc(nameOf(target))}`}`;
-    const cls = o ? (o === target ? 'slot mine' : 'slot taken') : 'slot open';
-    const face = o ? esc(initial(T.people[o].name)) : '+';
-    return `<button type="button" class="${cls}" ${o ? `style="--pc:${pc(T.people[o])}"` : ''} data-act="slot" data-i="${it.id}" data-owner="${o || ''}" aria-label="${label}" ${T.closed ? 'disabled' : ''}>${face}</button>`;
+  const slots = inf.slots.map((ps, k) => {
+    const n = `${name} ${k + 1} of ${it.qty}`;
+    const names = ps.map(shortName);
+    const label = !ps.length ? `${n}: open, tap to take it${target === me ? '' : ` for ${esc(nameOf(target))}`}`
+      : ps.includes(target) ? `${n}: ${esc(names.join(' and '))}. Tap to ${target === me ? 'give yours back' : `take ${esc(nameOf(target))} off`}`
+        : `${n}: ${esc(names.join(' and '))}. Tap if ${target === me ? 'you' : esc(nameOf(target))} shared it`;
+    const cls = !ps.length ? 'slot open' : ps.includes(target) ? 'slot mine' : 'slot taken';
+    const { face, style } = slotFace(ps);
+    return `<button type="button" class="${cls}${ps.length > 1 ? ' shared' : ''}" ${style ? `style="${style}"` : ''} data-act="slot" data-i="${it.id}" data-k="${k}" data-owner="${ps.join('+')}" aria-label="${label}" ${T.closed ? 'disabled' : ''}>${face}</button>`;
   }).join('');
-  return `<div class="slots" role="group" aria-label="${name}, one per drink or plate">${slots}${extra ? `<span class="slot-extra">+${extra} too many</span>` : ''}</div>`;
+  return `<div class="slots" role="group" aria-label="${name}, one per drink or plate">${slots}</div>`;
 }
 
 function statusOf(r) {
@@ -496,7 +527,7 @@ function peoplePanel(C) {
     if (n) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
-        const what = inf.m === 'count' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
+        const what = T.mode !== 'even' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
         return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Assign</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
       }).join('')}</ul>`;
     }
@@ -605,20 +636,35 @@ function renderSheet(C) {
   if (!s) return;
   if (s.type === 'item') {
     const it = T.items.find((x) => x.id === s.i); if (!it) { closeSheet(); return; }
-    const inf = C.info[it.id], even = T.mode === 'even', m = inf.m;
-    const rows = [me, ...people().map((p) => p.id).filter((id) => id !== me)].map((pid) => {
-      const p = T.people[pid], n = units(it.id, pid), amt = inf.out[pid] || 0;
-      const who = pid === me ? 'You' : esc(p.name);
-      const control = even || m === 'share'
-        ? `<button type="button" class="tick" data-act="s-toggle" data-p="${pid}" aria-pressed="${n > 0}" aria-label="${who} had ${esc(it.name)}">${CHECK}</button>`
-        : `<span class="stepper"><button type="button" data-act="s-dec" data-p="${pid}" aria-label="One fewer for ${who}" ${n <= 0 ? 'disabled' : ''}>−</button><output>${n}</output><button type="button" data-act="s-inc" data-p="${pid}" aria-label="One more for ${who}">+</button></span>`;
-      return `<div class="prow">${av(p)}<span class="grow">${who}</span><span class="money muted">${amt ? fmt(amt) : ''}</span>${control}</div>`;
+    const inf = C.info[it.id], even = T.mode === 'even';
+    const k = Math.min(s.k || 0, it.qty - 1);
+    const t = who();
+    const order = [t, ...people().map((p) => p.id).filter((id) => id !== t)];
+    const slot = even ? null : inf.slots[k];
+    const isIn = (pid) => (even ? units(it.id, pid) > 0 : slot.includes(pid));
+    const rows = order.map((pid) => {
+      const p = T.people[pid], label = pid === me ? 'You' : esc(p.name);
+      return `<div class="prow">${av(p)}<span class="grow">${label}</span>
+        <button type="button" class="tick" data-act="s-toggle" data-p="${pid}" aria-pressed="${isIn(pid)}" aria-label="${label} had ${even || it.qty < 2 ? esc(it.name) : `number ${k + 1}`}">${CHECK}</button></div>`;
     }).join('');
-    const seg = !even && it.qty > 1 ? `<div class="seg" role="group" aria-label="How ${esc(it.name)} is split">
-      <button type="button" data-act="s-mode" data-m="count" aria-pressed="${m === 'count'}">Count each one</button>
-      <button type="button" data-act="s-mode" data-m="share" aria-pressed="${m === 'share'}">Shared</button></div>` : '';
-    const sub = even ? 'Everyone ticked shares it evenly.' : m === 'count' ? `${it.qty} on the receipt at ${fmt(it.cents / it.qty)} each. Set how many each person had.` : 'Everyone ticked shares it evenly.';
-    setHTML(b, `<div class="sh"><h2 id="sheetTitle">${esc(it.name)} <span class="muted money">${fmt(it.cents)}</span></h2><p class="sub">${sub}</p>${seg}${rows}<div class="sh-foot">${done()}</div></div>`);
+    let top = '', sub;
+    if (even) sub = 'Everyone ticked splits it evenly.';
+    else if (it.qty < 2) sub = 'Tick everyone who had it. It’s split evenly between them.';
+    else {
+      sub = `${it.qty} on the receipt at ${fmt(it.cents / it.qty)} each. Pick one, then tick who had it. Tick two or more if they shared it.`;
+      top = `<div class="slots sheet-slots" role="group" aria-label="Pick one">${inf.slots.map((ps, j) => {
+        const { face, style } = slotFace(ps);
+        return `<button type="button" class="slot ${ps.length ? 'taken' : 'open'}${j === k ? ' picked' : ''}" ${style ? `style="${style}"` : ''} data-act="s-pick" data-k="${j}" aria-pressed="${j === k}" aria-label="Number ${j + 1}: ${ps.length ? esc(ps.map(shortName).join(' and ')) : 'open'}">${face}</button>`;
+      }).join('')}</div>`;
+    }
+    if (s.ask && slot && slot.length && !slot.includes(t)) {
+      top += `<div class="banner"><p style="margin:0 0 8px">This one is ${esc(slot.map(shortName).join(' and '))}’s. Did ${t === me ? 'you' : esc(nameOf(t))} share it?</p>
+        <button type="button" class="btn sm" data-act="s-yes">Yes, ${t === me ? 'I' : esc(nameOf(t))} shared it</button></div>`;
+    }
+    const all = !even && it.qty > 1 && slot.length
+      ? `<button type="button" class="btn ghost wide" data-act="s-all">Same people for all ${it.qty}</button>` : '';
+    setHTML(b, `<div class="sh"><h2 id="sheetTitle">${esc(it.name)}${!even && it.qty > 1 ? ` <span class="muted">· ${k + 1} of ${it.qty}</span>` : ''} <span class="muted money">${fmt(it.cents)}</span></h2>
+      <p class="sub">${sub}</p>${top}${rows}<div class="sh-foot">${all}${done()}</div></div>`);
   } else if (s.type === 'mine') {
     const r = C.byId[me];
     let pay = '';
@@ -669,22 +715,21 @@ function renderSheet(C) {
 }
 
 /* ---------- Actions on a tab ---------- */
-function setUnits(i, p, u) {
+function setUnits(i, p, u) { // even split: in (1) or out (0)
   lastActivity = Date.now();
-  pend.set(i + '|' + p, Math.max(0, Math.min(99, u)));
+  pend.set(i + '|' + p, u > 0 ? 1 : 0);
   renderAll(); scheduleFlush();
 }
-async function setMode(i, mval) {
-  pendModes.set(i, mval); renderAll();
-  try { const r = await post(body({ op: 'mode', i, m: mval })); if (pendModes.get(i) === mval) pendModes.delete(i); accept(r.state); } catch (e) { pendModes.delete(i); toast(e.message); renderAll(); }
+function slotOp(op) { // itemized: take / join / leave a slot
+  lastActivity = Date.now();
+  pendOps.push(op);
+  renderAll(); scheduleFlush();
 }
-function claimTap(it, who = me) {
-  const even = T.mode === 'even', u = units(it.id, who);
-  if (!even && modeOf(it) === 'count' && it.qty > 1) {
-    const inf = compute_().info[it.id];
-    if (inf.tot >= it.qty) toast(`All ${it.qty} are already claimed. Use ⋯ to fix the counts.`);
-    setUnits(it.id, who, u + 1);
-  } else setUnits(it.id, who, u > 0 ? 0 : 1);
+// The tick on a single item: in or out (joining shares it with whoever has it).
+function toggleItem(it, p) {
+  if (T.mode === 'even') { setUnits(it.id, p, units(it.id, p) > 0 ? 0 : 1); return; }
+  const k = 0, sl = slotsNow(it);
+  slotOp({ a: sl[k].includes(p) ? 'leave' : 'join', i: it.id, k, p });
 }
 function setMe(id, fromLink) {
   me = id;
@@ -715,7 +760,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { clearTimeout(pollT); return; }
   lastActivity = Date.now();
   if (payReturn) openSheet({ type: 'paycheck', amt: payReturn.amt });
-  if (tabId && T) { poll(); if (pend.size) scheduleFlush(50); }
+  if (tabId && T) { poll(); if (pend.size || pendOps.length) scheduleFlush(50); }
 });
 
 app.addEventListener('click', (e) => {
@@ -728,16 +773,13 @@ app.addEventListener('click', (e) => {
   const it = b.dataset.i && T.items.find((x) => x.id === b.dataset.i);
   if (a === 'item' && it) { openSheet({ type: 'item', i: it.id }); return; }
   if (a === 'slot' && it) {
-    const owner = b.dataset.owner, t = who();
-    if (!owner) setUnits(it.id, t, units(it.id, t) + 1);
-    else if (owner === t) setUnits(it.id, t, units(it.id, t) - 1);
-    else if (isHost) setUnits(it.id, owner, units(it.id, owner) - 1);
-    else toast(`That one’s ${nameOf(owner)}’s. Tap an open slot, or use ⋯ to fix the counts.`);
+    const k = Number(b.dataset.k), t = who(), sl = slotsNow(it)[k] || [];
+    if (!sl.length) slotOp({ a: 'take', i: it.id, p: t });
+    else if (sl.includes(t)) slotOp({ a: 'leave', i: it.id, k, p: t });
+    else openSheet({ type: 'item', i: it.id, k, ask: true });
     return;
   }
-  if (a === 'inc' && it) claimTap(it, who());
-  if (a === 'dec' && it) setUnits(it.id, who(), units(it.id, who()) - 1);
-  if (a === 'toggle' && it) setUnits(it.id, who(), units(it.id, who()) > 0 ? 0 : 1);
+  if (a === 'toggle' && it) toggleItem(it, who());
   if (a === 'editfor') { editFor = b.dataset.p === me ? null : b.dataset.p; view = 'items'; renderAll(); window.scrollTo(0, 0); return; }
   if (a === 'editdone') { const back = !!editFor; editFor = null; view = back ? 'people' : 'items'; renderAll(); window.scrollTo(0, 0); return; }
   if (a === 'mine') { openSheet({ type: 'mine' }); return; }
@@ -792,14 +834,30 @@ $('#sheetBody').addEventListener('click', (e) => {
   if (a === 'paidyes') { payReturn = null; closeSheet(); act({ op: 'paid', p: me, amount: Number(b.dataset.amt), how: 'venmo' }, 'Marked as paid. Thanks!'); return; }
   if (a === 'unpaid-me') { closeSheet(); act({ op: 'unpaid', p: me }, 'Payment undone'); return; }
   if (a === 'switch') { closeSheet(); me = null; store.set('tab-me:' + tabId, null); renderAll(); return; }
-  if (a === 'give') { const it = T.items.find((x) => x.id === s.i); if (it) { const inf = compute_().info[it.id]; const add = inf.m === 'count' && it.qty > 1 ? Math.max(1, inf.left) : 1; setUnits(it.id, b.dataset.p, units(it.id, b.dataset.p) + add); toast(`Given to ${nameOf(b.dataset.p)}`); } closeSheet(); return; }
+  if (a === 'give') {
+    const it = T.items.find((x) => x.id === s.i);
+    if (it) {
+      const pid = b.dataset.p;
+      if (T.mode === 'even') setUnits(it.id, pid, 1);
+      else { const open = slotsNow(it).filter((x) => !x.length).length; for (let n = 0; n < Math.max(1, open); n++) slotOp(open ? { a: 'take', i: it.id, p: pid } : { a: 'join', i: it.id, k: 0, p: pid }); }
+      toast(`Given to ${nameOf(pid)}`);
+    }
+    closeSheet(); return;
+  }
   if (s.type === 'item') {
     const it = T.items.find((x) => x.id === s.i); if (!it) return;
-    const pid = b.dataset.p;
-    if (a === 's-mode') { setMode(it.id, b.dataset.m); return; }
-    if (a === 's-toggle') setUnits(it.id, pid, units(it.id, pid) > 0 ? 0 : 1);
-    if (a === 's-inc') setUnits(it.id, pid, units(it.id, pid) + 1);
-    if (a === 's-dec') setUnits(it.id, pid, units(it.id, pid) - 1);
+    const k = Math.min(s.k || 0, it.qty - 1);
+    if (a === 's-pick') { sheet.k = Number(b.dataset.k); sheet.ask = false; renderSheet(compute_()); return; }
+    if (a === 's-yes') { sheet.ask = false; slotOp({ a: 'join', i: it.id, k, p: who() }); return; }
+    if (a === 's-toggle') {
+      const pid = b.dataset.p;
+      if (T.mode === 'even') setUnits(it.id, pid, units(it.id, pid) > 0 ? 0 : 1);
+      else slotOp({ a: slotsNow(it)[k].includes(pid) ? 'leave' : 'join', i: it.id, k, p: pid });
+    }
+    if (a === 's-all') {
+      const ps = slotsNow(it)[k].slice();
+      flush().then(() => act({ op: 'shareAll', i: it.id, ps }, `All ${it.qty} shared by ${ps.length}`));
+    }
   }
 });
 $('#sheetBody').addEventListener('submit', (e) => {
@@ -817,8 +875,8 @@ $('#sheetBody').addEventListener('submit', (e) => {
     closeSheet(); act({ op: 'rename', p: me, name }, 'Name updated');
   }
 });
-window.addEventListener('online', () => { if (tabId) { poll(); if (pend.size) scheduleFlush(50); } });
-window.addEventListener('pagehide', () => { if (pend.size) flush(); });
+window.addEventListener('online', () => { if (tabId) { poll(); if (pend.size || pendOps.length) scheduleFlush(50); } });
+window.addEventListener('pagehide', () => { if (pend.size || pendOps.length) flush(); });
 window.addEventListener('popstate', () => location.reload());
 
 /* ---------- Start ---------- */

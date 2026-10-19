@@ -111,9 +111,9 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
   assert.match(nick.text('#app'), /Large Hot Honey/); // shown on Ben's card in People
   await nick.settle();
   const T = raw();
-  assert.equal(T.claims[iid('Large Hot Honey')][pid('Ben')], 1);
+  assert.deepEqual(T.slots[iid('Large Hot Honey')], [[pid('Ben')]]);
   assert.equal(T.by[iid('Large Hot Honey')][pid('Ben')], HOST);
-  assert.equal(T.claims[iid('Bloody Mary')][HOST], 1);
+  assert.deepEqual(T.slots[iid('Bloody Mary')], [[HOST]]);
 });
 
 // ---------- Anna opens the group link ----------
@@ -137,16 +137,20 @@ await step('Anna sees the names Nick added and taps hers', async () => {
 await step('Anna claims her pizza and cider, and shares the curds with Nick', async () => {
   await anna.click(`[data-act="toggle"][data-i="${iid('Large Margherita')}"]`);
   const cider = iid('Von Stiehl Cherry Cider DRFT');
-  // Nick's slot isn't hers: tapping it changes nothing
+  // Nick's cider isn't hers: tapping it asks whether she shared it, and changes nothing yet
   await anna.click(`[data-act="slot"][data-i="${cider}"][data-owner="${HOST}"]`);
-  assert.equal(raw().claims[cider][pid('Anna')] || 0, 0);
+  assert.match(anna.text('#sheetBody'), /Did you share it\?/);
+  await anna.click('#sheetBody [data-act="close-sheet"]');
+  assert.deepEqual(raw().slots[cider], [[HOST], []]);
   await anna.click(`[data-act="slot"][data-i="${cider}"][data-owner=""]`);
   const owners = [...anna.w.document.querySelectorAll(`[data-act="slot"][data-i="${cider}"]`)].map((b) => b.dataset.owner);
   assert.deepEqual(owners, [HOST, pid('Anna')], 'one slot each, nothing open');
+  // Both curds were shared with Nick: tick both of them on the first, then "same for all"
   await anna.click(`[data-act="item"][data-i="${iid('Fried Cheese Curds')}"]`);
-  await anna.click('#sheetBody [data-act="s-mode"][data-m="share"]');
   await anna.click(`#sheetBody [data-act="s-toggle"][data-p="${pid('Anna')}"]`);
   await anna.click(`#sheetBody [data-act="s-toggle"][data-p="${HOST}"]`);
+  await anna.click('#sheetBody [data-act="s-all"]');
+  await anna.settle();
   await anna.click('#sheetBody [data-act="close-sheet"]');
   await anna.settle();
   const C = compute(raw());
@@ -216,7 +220,7 @@ await step('Nick gives the Diet Coke to Ben and lets Ben’s remainder go', asyn
   await nick2.click(`[data-act="assign"][data-i="${iid('Diet Coke')}"]`);
   await nick2.click(`#sheetBody [data-act="give"][data-p="${pid('Ben')}"]`);
   await nick2.settle();
-  assert.equal(raw().claims[iid('Diet Coke')][pid('Ben')], 1);
+  assert.deepEqual(raw().slots[iid('Diet Coke')], [[pid('Ben')]]);
   await nick2.click(`[data-act="waive"][data-p="${pid('Ben')}"]`);
   const C = compute(raw());
   assert.equal(C.byId[pid('Ben')].settled, true);
