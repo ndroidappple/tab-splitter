@@ -440,21 +440,37 @@ function itemRowHtml(it, C, target) {
   const addedBy = T.by && T.by[it.id] && T.by[it.id][target];
   if (!editFor && addedBy && addedBy !== target && (mine || even)) meta.push(`<span class="tag">${even ? 'Changed' : 'Added'} by ${esc(shortName(addedBy))}</span>`);
   const name = esc(it.name);
-  let ctl = '';
-  if (!T.closed) {
-    if (!even && m === 'count' && it.qty > 1) {
-      ctl = mine
-        ? `<span class="step"><button type="button" data-act="dec" data-i="${it.id}" aria-label="One fewer ${name}${forName}">−</button><output>${myU}</output><button type="button" data-act="inc" data-i="${it.id}" aria-label="One more ${name}${forName}">+</button></span>`
-        : `<button type="button" class="plus" data-act="inc" data-i="${it.id}" aria-label="Add one ${name}${forName}">+</button>`;
-    } else {
-      ctl = `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${name}${forName}">${CHECK}</button>`;
-    }
+  if (!even && m === 'count' && it.qty > 1) {
+    return `<div class="row slotted${mine ? ' mine' : ''}"><div class="row-top">
+      <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had it">
+        <span class="r-name">${name} <span class="muted">×${it.qty}</span></span><span class="r-meta">${meta.join('')}</span></button>
+      ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Fix counts for ${name}">⋯</button>`}</div>
+      ${slotsHtml(it, inf, target)}</div>`;
   }
+  const ctl = T.closed ? ''
+    : `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${name}${forName}">${CHECK}</button>`;
   return `<div class="row${mine ? ' mine' : ''}">
     <button type="button" class="r-main" data-act="item" data-i="${it.id}" aria-label="${name}: who had it">
       <span class="r-name">${name}${it.qty > 1 ? ` <span class="muted">×${it.qty}</span>` : ''}</span><span class="r-meta">${meta.join('')}</span></button>
     ${ctl}
     ${T.closed ? '' : `<button type="button" class="more" data-act="item" data-i="${it.id}" aria-label="Who had ${name}">⋯</button>`}</div>`;
+}
+
+// One slot per unit on the receipt, filled in people order: "N N N N A _ _".
+function slotsHtml(it, inf, target) {
+  const owners = [];
+  for (const p of people()) for (let k = 0; k < units(it.id, p.id); k++) owners.push(p.id);
+  const extra = Math.max(0, owners.length - it.qty);
+  const name = esc(it.name);
+  const slots = Array.from({ length: it.qty }, (_, k) => {
+    const o = owners[k];
+    const label = o ? `${name} ${k + 1} of ${it.qty}: ${o === target ? (target === me ? 'yours, tap to give it back' : `${esc(nameOf(target))}’s, tap to remove`) : `${esc(shortName(o))}’s`}`
+      : `${name} ${k + 1} of ${it.qty}: open, tap to take it${target === me ? '' : ` for ${esc(nameOf(target))}`}`;
+    const cls = o ? (o === target ? 'slot mine' : 'slot taken') : 'slot open';
+    const face = o ? esc(initial(T.people[o].name)) : '+';
+    return `<button type="button" class="${cls}" ${o ? `style="--pc:${pc(T.people[o])}"` : ''} data-act="slot" data-i="${it.id}" data-owner="${o || ''}" aria-label="${label}" ${T.closed ? 'disabled' : ''}>${face}</button>`;
+  }).join('');
+  return `<div class="slots" role="group" aria-label="${name}, one per drink or plate">${slots}${extra ? `<span class="slot-extra">+${extra} too many</span>` : ''}</div>`;
 }
 
 function statusOf(r) {
@@ -711,6 +727,14 @@ app.addEventListener('click', (e) => {
   if (a === 'view') { view = b.dataset.v; editFor = null; renderAll(); return; }
   const it = b.dataset.i && T.items.find((x) => x.id === b.dataset.i);
   if (a === 'item' && it) { openSheet({ type: 'item', i: it.id }); return; }
+  if (a === 'slot' && it) {
+    const owner = b.dataset.owner, t = who();
+    if (!owner) setUnits(it.id, t, units(it.id, t) + 1);
+    else if (owner === t) setUnits(it.id, t, units(it.id, t) - 1);
+    else if (isHost) setUnits(it.id, owner, units(it.id, owner) - 1);
+    else toast(`That one’s ${nameOf(owner)}’s. Tap an open slot, or use ⋯ to fix the counts.`);
+    return;
+  }
   if (a === 'inc' && it) claimTap(it, who());
   if (a === 'dec' && it) setUnits(it.id, who(), units(it.id, who()) - 1);
   if (a === 'toggle' && it) setUnits(it.id, who(), units(it.id, who()) > 0 ? 0 : 1);

@@ -100,7 +100,7 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
   await nick.click('[data-act="view"][data-v="items"]');
   await nick.click(`[data-act="toggle"][data-i="${iid('Large Sausage & Pesto')}"]`);
   await nick.click(`[data-act="toggle"][data-i="${iid('Bloody Mary')}"]`);
-  await nick.click(`[data-act="inc"][data-i="${iid('Von Stiehl Cherry Cider DRFT')}"]`);
+  await nick.click(`[data-act="slot"][data-i="${iid('Von Stiehl Cherry Cider DRFT')}"][data-owner=""]`);
   await nick.click('[data-act="view"][data-v="people"]');
   await nick.click(`[data-act="editfor"][data-p="${pid('Ben')}"]`);
   assert.match(nick.text('#app'), /Editing Ben’s items/);
@@ -136,7 +136,13 @@ await step('Anna sees the names Nick added and taps hers', async () => {
 });
 await step('Anna claims her pizza and cider, and shares the curds with Nick', async () => {
   await anna.click(`[data-act="toggle"][data-i="${iid('Large Margherita')}"]`);
-  await anna.click(`[data-act="inc"][data-i="${iid('Von Stiehl Cherry Cider DRFT')}"]`);
+  const cider = iid('Von Stiehl Cherry Cider DRFT');
+  // Nick's slot isn't hers: tapping it changes nothing
+  await anna.click(`[data-act="slot"][data-i="${cider}"][data-owner="${HOST}"]`);
+  assert.equal(raw().claims[cider][pid('Anna')] || 0, 0);
+  await anna.click(`[data-act="slot"][data-i="${cider}"][data-owner=""]`);
+  const owners = [...anna.w.document.querySelectorAll(`[data-act="slot"][data-i="${cider}"]`)].map((b) => b.dataset.owner);
+  assert.deepEqual(owners, [HOST, pid('Anna')], 'one slot each, nothing open');
   await anna.click(`[data-act="item"][data-i="${iid('Fried Cheese Curds')}"]`);
   await anna.click('#sheetBody [data-act="s-mode"][data-m="share"]');
   await anna.click(`#sheetBody [data-act="s-toggle"][data-p="${pid('Anna')}"]`);

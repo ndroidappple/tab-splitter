@@ -162,6 +162,15 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .more-acts > summary{list-style:none}
 .more-acts > summary::-webkit-details-marker{display:none}
 .more-acts[open]{display:block;width:100%}
+.row.slotted{flex-direction:column;align-items:stretch;gap:0}
+.row-top{display:flex;align-items:center;gap:4px;padding-right:4px}
+.slots{display:flex;flex-wrap:wrap;gap:8px;padding:0 12px 12px 14px;align-items:center}
+.slot{width:40px;height:40px;border-radius:50%;padding:0;font-weight:800;font-size:15px;cursor:pointer;display:grid;place-items:center}
+.slot.open{border:2px dashed var(--line);background:transparent;color:var(--muted);font-size:20px;font-weight:600}
+.slot.taken{border:0;background:var(--pc);color:#fff;opacity:.55}
+.slot.mine{border:3px solid var(--card);background:var(--pc);color:#fff;box-shadow:0 0 0 2px var(--pc)}
+.slot:disabled{cursor:default}
+.slot-extra{color:var(--warn);font-weight:700;font-size:13.5px}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
 .toast.show{opacity:1}
 .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--me);animation:sp 1s linear infinite;display:inline-block;vertical-align:middle}
