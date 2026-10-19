@@ -1,3 +1,9 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
+
+# Every tab link (/t/abc123defg) serves the same page; the page reads the id from the address.
+[[redirects]]
+  from = "/t/*"
+  to = "/index.html"
+  status = 200

@@ -1,106 +1,130 @@
-// The bill and the split math, shared by the page and the server so both
-// always compute the same totals. Amounts are in cents.
+// Split math shared by the page and the server, so both always agree.
+// All amounts are whole cents.
+//
+// One rule for everything that isn't an item: tax, fees, gratuity and tip are
+// whatever the card was charged beyond the items, and each person pays that in
+// proportion to what they had.
 
-export const PAYER = 'nick';
+export const HOST = 'host';
+export const SLACK = 1; // cents of rounding we treat as settled
 
-export const ITEMS = [
-  {id:'bloody',   name:'Bloody Mary',                       qty:1, cents:1000, cat:'Drinks'},
-  {id:'mojito',   name:'Door County Cherry Mojito',         qty:3, cents:3000, cat:'Drinks'},
-  {id:'vacay',    name:'Vacationland, Door County Brewing', qty:1, cents:600,  cat:'Drinks'},
-  {id:'lemonade', name:'Cherry Lemonade',                   qty:2, cents:1800, cat:'Drinks'},
-  {id:'carbliss', name:'Carbliss',                          qty:7, cents:4200, cat:'Drinks'},
-  {id:'shandy',   name:'Linneys Summer Shandy',             qty:1, cents:600,  cat:'Drinks'},
-  {id:'mule',     name:'Cherry Mule',                       qty:2, cents:2000, cat:'Drinks'},
-  {id:'cow',      name:'Spotted Cow',                       qty:9, cents:4500, cat:'Drinks'},
-  {id:'miller',   name:'Miller Light Draft',                qty:1, cents:300,  cat:'Drinks'},
-  {id:'rumple',   name:'Rumpleminz',                        qty:4, cents:1200, cat:'Drinks'},
-  {id:'fireball', name:'Fireball',                          qty:3, cents:900,  cat:'Drinks'},
-  {id:'curds',    name:'Cheese Curds',                      qty:3, cents:2685, cat:'Food', def:'share'},
-  {id:'csalad',   name:'Doco Cherry Salad',                 qty:1, cents:1995, cat:'Food'},
-  {id:'wrap',     name:'Fire Chicken Wrap',                 qty:1, cents:1495, cat:'Food'},
-  {id:'wings',    name:'Chicken Wings (12)',                qty:1, cents:1495, cat:'Food'},
-  {id:'hsalad',   name:'House Salad',                       qty:1, cents:1295, cat:'Food'},
-  {id:'pork',     name:'DoCo Pulled Pork',                  qty:1, cents:1295, cat:'Food'},
-  {id:'fish',     name:'Fish and Chips',                    qty:2, cents:3390, cat:'Food'},
-  {id:'philly',   name:'Philly Cheese Steak',               qty:1, cents:1695, cat:'Food'},
-];
-export const SUB = 35445, TAX = 901, FEE = 1063, TIP = 7089, TOTAL = 44498, FEES = TAX + FEE;
-
-// item id -> quantity on the receipt (the server uses this to validate requests)
-export const ITEM_QTY = Object.fromEntries(ITEMS.map(i => [i.id, i.qty]));
-
-// Everyone on the tab, payer first, then in the order they joined.
-export function people(S){
-  return Object.entries(S.people).map(([id, v]) => Object.assign({ id }, v))
-    .sort((a, b) => a.id === PAYER ? -1 : b.id === PAYER ? 1 : (a.t || 0) - (b.t || 0));
+// Everyone on the tab: host first, then in the order they were added.
+export function people(T) {
+  return Object.entries(T.people || {}).map(([id, v]) => Object.assign({ id }, v))
+    .sort((a, b) => (a.id === HOST ? -1 : b.id === HOST ? 1 : (a.t || 0) - (b.t || 0)));
 }
 
-function lineLabel(it, m, u, ent, tot, even){
-  if (m === 'count' && tot <= it.qty) return `${it.name} ×${u}`;
-  if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on bill)`;
-  if (ent.length === 1) return it.name;
-  return even ? `${it.name}, split ${ent.length} ways` : `${it.name}, ${u} of ${tot} shares`;
+export const itemsTotal = (T) => (T.items || []).reduce((s, it) => s + it.cents, 0);
+
+function lineLabel(it, m, u, n, tot, even) {
+  if (m === 'count' && tot <= it.qty) return it.qty > 1 ? `${it.name} ×${u}` : it.name;
+  if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on the receipt)`;
+  if (n === 1) return it.name;
+  return even ? `${it.name}, split ${n} ways` : `${it.name}, ${u} of ${tot} shares`;
 }
 
-// Works out what everyone owes. The page passes its own `units` and `modeOf`
-// so taps that haven't synced yet show up right away; the server uses the
-// saved state as it is.
-export function compute(S, opts = {}){
-  const units = opts.units || ((i, p) => (S.claims[i] && S.claims[i][p]) || 0);
-  const modeOf = opts.modeOf || (it => it.qty < 2 ? 'share' : (S.modes[it.id] || it.def || 'count'));
-  const ppl = people(S), N = ppl.length;
+// Splits `target` cents across `weights` so the parts add up exactly
+// (largest remainder). Equal parts when every weight is zero.
+export function apportion(target, weights) {
+  const n = weights.length;
+  if (!n) return [];
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const w = sum > 0 ? weights : weights.map(() => 1);
+  const ws = sum > 0 ? sum : n;
+  const exact = w.map((x) => (target * x) / ws);
+  const base = exact.map((x) => Math.floor(x + 1e-9));
+  let rem = target - base.reduce((a, b) => a + b, 0);
+  exact.map((x, i) => [i, x - Math.floor(x + 1e-9)]).sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .forEach(([i]) => { if (rem > 0) { base[i]++; rem--; } });
+  return base;
+}
+
+// Works out what everyone owes. The page passes `units`, `modeOf` and `isOut`
+// so taps that haven't synced yet show right away; the server uses saved state.
+export function compute(T, opts = {}) {
+  const units = opts.units || ((i, p) => (T.claims && T.claims[i] && T.claims[i][p]) || 0);
+  const isOut = opts.isOut || ((i, p) => !!(T.out && T.out[i] && T.out[i][p]));
+  const modeOf = opts.modeOf || ((it) => (it.qty < 2 ? 'share' : (T.modes && T.modes[it.id]) || 'count'));
+  const even = T.mode === 'even';
+  const ppl = people(T);
   const byId = {};
-  ppl.forEach(p => byId[p.id] = { p, sub:0, lines:[] });
+  ppl.forEach((p) => { byId[p.id] = { p, sub: 0, lines: [] }; });
   const info = {};
   let claimed = 0;
-  for (const it of ITEMS){
-    const m = modeOf(it);
-    const ent = ppl.map(p => [p.id, units(it.id, p.id)]).filter(([, u]) => u > 0);
+  for (const it of T.items || []) {
+    const m = even ? 'share' : modeOf(it);
+    const ent = even
+      ? ppl.filter((p) => !isOut(it.id, p.id)).map((p) => [p.id, 1])
+      : ppl.map((p) => [p.id, units(it.id, p.id)]).filter(([, u]) => u > 0);
     const tot = ent.reduce((s, [, u]) => s + u, 0);
     const out = {};
     let c = 0, over = 0, left;
     if (!ent.length) left = m === 'count' ? it.qty : 1;
-    else if (m === 'count' && tot <= it.qty){
+    else if (m === 'count' && tot <= it.qty) {
       const unit = it.cents / it.qty;
-      ent.forEach(([p, u]) => out[p] = u * unit);
+      ent.forEach(([p, u]) => { out[p] = u * unit; });
       c = tot * unit; left = it.qty - tot;
     } else {
-      ent.forEach(([p, u]) => out[p] = it.cents * u / tot);
+      ent.forEach(([p, u]) => { out[p] = (it.cents * u) / tot; });
       c = it.cents; left = 0;
       if (m === 'count') over = tot - it.qty;
     }
-    const even = ent.every(([, u]) => u === (ent[0] || [0, 0])[1]);
-    info[it.id] = { m, ent, tot, out, c, over, left, even, done: ent.length > 0 && left === 0 };
+    const same = ent.every(([, u]) => u === (ent[0] || [0, 0])[1]);
+    info[it.id] = { m, ent, tot, out, c, over, left, done: ent.length > 0 && left === 0 };
     claimed += c;
-    ent.forEach(([p, u]) => { byId[p].sub += out[p]; byId[p].lines.push({ label:lineLabel(it, m, u, ent, tot, even), amt:out[p] }); });
+    ent.forEach(([p, u]) => {
+      byId[p].sub += out[p];
+      byId[p].lines.push({ item: it.id, label: lineLabel(it, m, u, ent.length, tot, same), amt: out[p] });
+    });
   }
-  const leftover = SUB - claimed > 0.5 ? SUB - claimed : 0;
-  if (S.leftover === 'split' && N && leftover){
-    const share = leftover / N;
-    ppl.forEach(p => { byId[p.id].sub += share; byId[p.id].lines.push({ label:'Share of unclaimed items', amt:share }); });
+
+  const total = itemsTotal(T);
+  const charge = T.charge || 0;
+  const factor = total > 0 ? charge / total : 0;
+  ppl.forEach((p) => { byId[p.id].exact = byId[p.id].sub * factor; });
+
+  // Paid people keep the total they paid against; everyone else shares the rest.
+  const isLocked = (p) => p.id !== HOST && p.lock != null;
+  const locked = ppl.filter(isLocked);
+  const free = ppl.filter((p) => !isLocked(p));
+  const sumLocked = locked.reduce((s, p) => s + p.lock, 0);
+  locked.forEach((p) => { byId[p.id].total = p.lock; });
+
+  if (T.pool === 'spread') {
+    // Anything not covered is shared by everyone who hasn't paid, by what they had.
+    const parts = apportion(charge - sumLocked, free.map((p) => byId[p.id].exact));
+    free.forEach((p, i) => { byId[p.id].total = parts[i]; });
+  } else {
+    const others = T.pool === 'cover' ? free.filter((p) => p.id !== HOST) : free;
+    const target = Math.round(others.reduce((s, p) => s + byId[p.id].exact, 0));
+    const parts = apportion(target, others.map((p) => byId[p.id].exact));
+    others.forEach((p, i) => { byId[p.id].total = parts[i]; });
+    if (T.pool === 'cover' && byId[HOST]) {
+      // The host takes whatever nobody else covers.
+      byId[HOST].total = charge - sumLocked - parts.reduce((a, b) => a + b, 0);
+    }
   }
-  const res = ppl.map(p => {
+
+  const res = ppl.map((p) => {
     const r = byId[p.id];
-    r.fees = r.sub * FEES / SUB;
-    r.tip = S.tip === 'even' ? TIP / N : r.sub * TIP / SUB;
-    r.exact = r.sub + r.fees + r.tip;
+    r.subR = Math.round(r.sub);
+    r.extrasR = r.total - r.subR;
+    r.locked = isLocked(p);
+    r.owed = p.id === HOST ? 0 : r.total - (p.paid || 0) - (p.waived || 0);
+    r.settled = p.id === HOST || (p.paid != null && r.owed <= SLACK);
     return r;
   });
-  // Round to cents so everyone's totals add up exactly (largest remainder)
-  const target = Math.round(res.reduce((t, r) => t + r.exact, 0));
-  const cents = res.map(r => Math.floor(r.exact + 1e-9));
-  let rem = target - cents.reduce((a, b) => a + b, 0);
-  res.map((r, i) => [i, r.exact - Math.floor(r.exact + 1e-9)]).sort((a, b) => b[1] - a[1])
-     .forEach(([i]) => { if (rem > 0){ cents[i]++; rem--; } });
-  res.forEach((r, i) => {
-    r.total = cents[i];
-    r.subR = Math.round(r.sub); r.feesR = Math.round(r.fees); r.tipR = r.total - r.subR - r.feesR;
-    r.owed = r.p.id === PAYER ? 0 : r.total - (r.p.paid || 0);
-  });
-  const others = res.filter(r => r.p.id !== PAYER);
-  const collected = others.reduce((s, r) => s + (r.p.paid || 0), 0);
-  const expected = others.reduce((s, r) => s + r.total, 0);
   const assigned = res.reduce((s, r) => s + r.total, 0);
-  const openItems = ITEMS.filter(it => !info[it.id].done);
-  return { ppl, res, byId, info, claimed, leftover, collected, expected, assigned, unassigned:TOTAL - assigned, openItems };
+  const others = res.filter((r) => r.p.id !== HOST);
+  const owing = others.filter((r) => r.total > 0);
+  const openItems = (T.items || []).filter((it) => !info[it.id].done);
+  const pool = charge - assigned; // not on anyone yet
+  return {
+    ppl, res, byId, info, claimed, itemsTotal: total, charge, extras: charge - total,
+    pool, openItems,
+    collected: others.reduce((s, r) => s + (r.p.paid || 0), 0),
+    expected: others.reduce((s, r) => s + r.total, 0),
+    allClaimed: openItems.length === 0 && (T.items || []).length > 0,
+    allPaid: owing.length > 0 && Math.abs(pool) <= SLACK && owing.every((r) => r.settled),
+  };
 }
