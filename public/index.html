@@ -3,943 +3,202 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Oct 17 tab</title>
-<meta name="description" content="Tap your name, claim what you had, and pay Nick back.">
+<title>Tab</title>
+<meta name="description" content="Split a tab: everyone claims what they had and pays the payer back.">
 <meta name="theme-color" content="#E9ECF1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍒</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
-  --bg:#E9ECF1; --card:#FFFFFF; --ink:#1B1D24; --muted:#636979; --line:#DDE1E8; --field:#EEF0F4;
-  --cherry:#C21F3A; --cherry-soft:#FBE6EA; --leaf:#1B7547; --leaf-soft:#E1F2E8;
+  --bg:#E9ECF1; --card:#FFFFFF; --ink:#1B1D24; --muted:#5D6373; --line:#D6DAE2; --field:#EEF0F4;
+  --warn:#B3261E; --warn-soft:#FBE7E5; --ok:#17703F; --ok-soft:#E1F2E8;
   --btn:#1B1D24; --btn-ink:#FFFFFF; --me:#2F5BD3;
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#15171C; --card:#1F2229; --ink:#F1F2F5; --muted:#9BA1AF; --line:#30343D; --field:#282C34;
-    --cherry:#F25670; --cherry-soft:#3B1D25; --leaf:#55C690; --leaf-soft:#18322A;
+    --bg:#15171C; --card:#1F2229; --ink:#F1F2F5; --muted:#A2A8B6; --line:#343844; --field:#282C34;
+    --warn:#F2867C; --warn-soft:#3B1F1D; --ok:#5ACB8E; --ok-soft:#18322A;
     --btn:#F1F2F5; --btn-ink:#15171C;
   }
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{
-  margin:0;background:var(--bg);color:var(--ink);
-  font:400 16px/1.4 'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;
-  font-optical-sizing:auto;-webkit-font-smoothing:antialiased;
-  padding-bottom:calc(96px + env(safe-area-inset-bottom));
-}
-button,input{font:inherit;color:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+button,input,select{font:inherit;color:inherit}
 button,a{-webkit-tap-highlight-color:transparent}
-:focus-visible{outline:2px solid var(--cherry);outline-offset:2px}
+:focus-visible{outline:3px solid var(--me);outline-offset:2px}
 [hidden]{display:none!important}
 .money{font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* Top bar */
-.top{
-  position:sticky;top:0;z-index:4;padding-top:env(safe-area-inset-top);
-  background:var(--bg);background:color-mix(in srgb,var(--bg) 90%,transparent);
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
-}
-.top-in{max-width:560px;margin:0 auto;padding:10px 16px 8px;display:flex;align-items:center;gap:12px}
+.top{position:sticky;top:0;z-index:4;padding-top:env(safe-area-inset-top);background:var(--bg);border-bottom:1px solid var(--line)}
+.top-in{max-width:560px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:56px}
 .brand{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
-.brand strong{font-size:19px;font-weight:800;letter-spacing:-.015em}
-.brand span{font-size:13px;color:var(--muted)}
-.me-btn{display:inline-flex;align-items:center;gap:8px;max-width:55%;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 12px 3px 3px;cursor:pointer;font-weight:650;font-size:14px}
-.me-btn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.me-btn small{color:var(--muted);font-weight:500;font-size:12.5px}
-.tabs{max-width:560px;margin:0 auto;padding:0 16px 10px}
-.tabs-in{display:flex;background:var(--field);border-radius:12px;padding:3px;gap:3px}
-.tabs button{flex:1;height:34px;border:0;border-radius:9px;background:transparent;font-weight:650;font-size:15px;color:var(--muted);cursor:pointer}
-.tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(20,22,30,.12)}
-.netbar{max-width:560px;margin:10px auto 0;padding:8px 12px;border-radius:12px;background:var(--cherry-soft);color:var(--cherry);font-size:14px;font-weight:600;width:calc(100% - 32px)}
+.brand strong{font-size:19px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand span{font-size:13.5px;color:var(--muted)}
+.chip-btn{display:inline-flex;align-items:center;gap:8px;max-width:50%;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px 4px 4px;min-height:40px;font-weight:650;font-size:14px;cursor:pointer}
+.chip-btn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.netbar{max-width:560px;margin:10px auto 0;padding:8px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:14px;font-weight:600;width:calc(100% - 32px)}
+.wrap{max-width:560px;margin:0 auto;padding:14px 16px 0}
 
-.wrap{max-width:560px;margin:0 auto;padding:12px 16px 0}
-
-/* Shared bits */
-.av{width:28px;height:28px;border-radius:50%;background:var(--pc);color:#fff;display:inline-grid;place-items:center;font-weight:700;font-size:13px;flex:none;font-style:normal}
-.av.lg{width:38px;height:38px;font-size:16px}
-.btn{
-  height:48px;padding:0 18px;border-radius:14px;border:0;background:var(--btn);color:var(--btn-ink);
-  font-weight:700;font-size:16px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
-}
-.btn:active{opacity:.85}
-.btn:disabled{opacity:.45;cursor:default}
-.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
-.btn.sm{height:36px;padding:0 13px;font-size:14px;border-radius:10px}
-.seg{display:inline-flex;flex-wrap:wrap;background:var(--field);border-radius:12px;padding:3px;gap:2px}
-.seg button{border:0;background:transparent;padding:7px 12px;border-radius:9px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(20,22,30,.12)}
-.pill{font-size:12.5px;font-weight:650;padding:3px 9px;border-radius:999px;white-space:nowrap;background:var(--field);color:var(--muted)}
-.pill.todo{background:var(--cherry-soft);color:var(--cherry)}
-.pill.done{background:var(--leaf-soft);color:var(--leaf)}
+h1{font-size:28px;margin:8px 0 6px;letter-spacing:-.02em;line-height:1.15}
+h2{font-size:18px;margin:18px 0 8px}
+.lede{color:var(--muted);margin:0 0 18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
-.card h3{margin:0 0 6px;font-size:16px;font-weight:750}
-.note{color:var(--muted);font-size:13.5px;margin:10px 2px 0}
-.bar{height:6px;border-radius:99px;background:var(--field);overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:var(--cherry);border-radius:99px;transition:width .35s ease}
-.bar i.full{background:var(--leaf)}
+.card h3{margin:0 0 6px;font-size:16px}
+.note{color:var(--muted);font-size:14px;margin:8px 2px 0}
+.banner{border-radius:12px;padding:10px 12px;font-size:14.5px;font-weight:600;margin:0 0 12px;background:var(--field)}
+.banner.ok{background:var(--ok-soft);color:var(--ok)}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
 
-/* Join */
-.loading{padding:60px 0;text-align:center;color:var(--muted)}
-.join h1{font-size:30px;margin:10px 0 4px;letter-spacing:-.025em;font-weight:800;line-height:1.1}
-.join .lede{color:var(--muted);margin:0 0 20px;max-width:34em}
-.join h2{font-size:17px;margin:0 0 10px;font-weight:750}
-.names{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:18px}
-.name-btn{display:flex;align-items:center;gap:10px;padding:9px 12px 9px 9px;border:1px solid var(--line);background:var(--card);border-radius:14px;cursor:pointer;text-align:left;min-height:58px}
-.name-btn b{display:block;font-weight:700;font-size:16px;line-height:1.2}
-.name-btn small{display:block;color:var(--muted);font-size:12.5px}
-.add{display:flex;gap:8px}
-.add input{flex:1;min-width:0;height:50px;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:0 14px;font-size:16px}
-.add input::placeholder{color:var(--muted)}
+.btn{min-height:48px;padding:0 18px;border-radius:14px;border:0;background:var(--btn);color:var(--btn-ink);font-weight:700;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;text-align:center;gap:8px}
+.btn.wide{width:100%}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.sm{min-height:40px;padding:0 12px;font-size:14.5px;border-radius:11px}
+.btn:disabled{opacity:.45;cursor:default}
+.link{background:none;border:0;color:var(--me);font-weight:650;padding:10px 4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row2{display:flex;gap:8px;flex-wrap:wrap}
+.row2 > *{flex:1}
 
-/* Claim list */
-.claim-top{margin-bottom:10px}
-.bar-row{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;color:var(--muted);margin-top:6px}
-.filters{margin-bottom:2px}
-.group h3{font-size:14px;font-weight:700;color:var(--muted);margin:14px 4px 6px}
+label.f{display:block;font-weight:650;font-size:14.5px;margin:12px 0 6px}
+.in{width:100%;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);padding:0 12px;font-size:16px}
+.in.money{text-align:right}
+.items-edit{display:flex;flex-direction:column;gap:8px}
+.ie{display:grid;grid-template-columns:1fr 52px 92px 40px;gap:6px;align-items:center}
+.ie .in{min-height:44px;padding:0 8px}
+.ie .x{width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:22px;cursor:pointer;border-radius:10px}
+.ie-head{display:grid;grid-template-columns:1fr 52px 92px 40px;gap:6px;font-size:12.5px;color:var(--muted);font-weight:600;padding:0 2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--field);border-radius:999px;padding:4px 4px 4px 12px;font-weight:600;font-size:14.5px}
+.chip button{border:0;background:none;width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--muted);font-size:18px}
+.choice{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;margin-bottom:8px}
+.choice input{margin-top:4px;width:20px;height:20px}
+.choice b{display:block}
+.choice span{color:var(--muted);font-size:14px}
+
+.av{width:28px;height:28px;border-radius:50%;background:var(--pc);color:#fff;display:inline-grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.av.lg{width:40px;height:40px;font-size:17px}
+.names{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px}
+.name-btn{display:flex;align-items:center;gap:10px;padding:9px 12px 9px 9px;border:1px solid var(--line);background:var(--card);border-radius:14px;cursor:pointer;text-align:left;min-height:60px;font-weight:700;font-size:16px}
+
+.seg{display:flex;background:var(--field);border-radius:12px;padding:3px;gap:3px;margin-bottom:12px}
+.seg button{flex:1;min-height:40px;border:0;border-radius:9px;background:transparent;font-weight:650;font-size:15px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(20,22,30,.14)}
 .rows{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-.row{display:flex;align-items:center;gap:6px;padding-right:4px;border-top:1px solid var(--line);position:relative}
+.row{display:flex;align-items:center;gap:4px;padding-right:4px;border-top:1px solid var(--line);position:relative;min-height:60px}
 .rows .row:first-child{border-top:0}
-.row.mine{background:var(--field);background:color-mix(in srgb,var(--me) 9%,var(--card))}
-.row.mine::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--me)}
-.r-main{flex:1;min-width:0;border:0;background:none;text-align:left;padding:9px 0 9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
-.r-name{font-weight:650;font-size:16px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.r-qty{color:var(--muted);font-weight:600;font-size:14px;margin-left:6px}
-.r-meta{display:flex;align-items:center;gap:4px 9px;flex-wrap:wrap;font-size:13px;color:var(--muted);line-height:1.3}
-.r-meta em{font-style:normal;color:var(--cherry);font-weight:650}
-.r-meta b{color:var(--ink);font-weight:750}
-.avs{display:inline-flex;align-items:center}
-.avs .av{width:18px;height:18px;font-size:10px;margin-left:-5px;box-shadow:0 0 0 2px var(--card)}
-.avs .av:first-child{margin-left:0}
-.avs .more{background:var(--muted)}
-.r-ctl{flex:none;display:flex;align-items:center}
-.tick,.plus{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
-.tick{color:transparent}
-.tick.on{background:var(--me);border-color:var(--me);color:#fff}
-.plus{font-size:22px;font-weight:600;color:var(--muted);line-height:1}
-.step{display:inline-flex;align-items:center;background:var(--me);color:#fff;border-radius:999px;height:38px}
-.step button{width:36px;height:38px;border:0;background:none;color:#fff;font-size:21px;font-weight:700;cursor:pointer;padding:0;line-height:1}
-.step output{min-width:16px;text-align:center;font-weight:800;font-size:16px}
-.r-more{flex:none;width:34px;height:44px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:10px;display:grid;place-items:center;padding:0}
-.r-more:hover{color:var(--ink)}
-.empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:18px;color:var(--muted);text-align:center;margin-top:12px}
-
-/* Everyone */
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.stat strong{display:block;font-size:22px;font-weight:800;letter-spacing:-.015em;line-height:1.15}
-.stat span{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-details.rec{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
-summary{cursor:pointer;color:var(--muted);font-weight:600;font-size:14px;list-style:none}
-summary::-webkit-details-marker{display:none}
-.tape{list-style:none;padding:0;margin:8px 0 0;font-size:14.5px}
-.tape li{display:flex;align-items:baseline;gap:8px;padding:2px 0}
-.tape i{flex:1;border-bottom:2px dotted var(--line);transform:translateY(-4px)}
-.tape li.tot{font-weight:750}
-.mini{list-style:none;margin:6px 0 0;padding:0}
-.mini li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
-.mini li:first-child{border-top:0}
-.mini .grow{flex:1;min-width:0}
-.mini small{display:block;color:var(--muted);font-size:12.5px}
-.person{border-top:1px solid var(--line)}
-.person:first-of-type{border-top:0}
-.person > summary{display:flex;align-items:center;gap:10px;padding:10px 0;color:var(--ink);font-size:16px}
-.p-name{flex:1;min-width:0;font-weight:650;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
-.p-name .who{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.p-amt{font-weight:800;font-size:17px}
-.p-body{padding:0 0 12px 38px}
+.row.mine{background:color-mix(in srgb,var(--me) 9%,var(--card))}
+.row.mine::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--me)}
+.r-main{flex:1;min-width:0;border:0;background:none;text-align:left;padding:10px 0 10px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.r-name{font-weight:650;font-size:16px;line-height:1.25}
+.r-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13.5px;color:var(--muted)}
+.r-meta em{font-style:normal;color:var(--warn);font-weight:650}
+.r-meta b{color:var(--ink)}
+.r-meta .tag{color:var(--me);font-weight:650}
+.tick{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:transparent;display:grid;place-items:center;cursor:pointer;color:transparent;padding:0}
+.tick[aria-pressed="true"]{background:var(--me);border-color:var(--me);color:#fff}
+.plus{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:transparent;font-size:24px;color:var(--muted);cursor:pointer;padding:0;line-height:1}
+.step{display:inline-flex;align-items:center;background:var(--me);color:#fff;border-radius:999px;height:44px}
+.step button{width:40px;height:44px;border:0;background:none;color:#fff;font-size:22px;font-weight:700;cursor:pointer;padding:0}
+.step output{min-width:18px;text-align:center;font-weight:800}
+.more{width:40px;height:48px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:10px;font-size:22px;padding:0}
 .lines{list-style:none;padding:0;margin:0}
-.lines li{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:4px 0;border-bottom:1px dotted var(--line)}
-.lines li:last-child{border-bottom:0}
-.sumline{font-size:13.5px;color:var(--muted);margin:6px 0 0}
+.lines li{display:flex;justify-content:space-between;gap:12px;font-size:15px;padding:6px 0;border-bottom:1px dotted var(--line)}
+.lines li.tot{font-weight:800;border-bottom:0}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.prow .grow{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stepper button{width:44px;height:44px;border:0;background:transparent;font-size:20px;cursor:pointer;padding:0}
+.stepper button:disabled{opacity:.3}
+.stepper output{min-width:26px;text-align:center;font-weight:700}
+.person{border-top:1px solid var(--line)}
+.person:first-child{border-top:0}
+.person > summary{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;list-style:none}
+.person > summary::-webkit-details-marker{display:none}
+.p-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.p-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-name small{color:var(--muted);font-size:13.5px}
+.p-name small.due{color:var(--warn);font-weight:650}
+.p-name small.done{color:var(--ok);font-weight:650}
+.p-body{padding:0 0 14px 38px}
 .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.set-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
-.set-row > span{font-weight:650}
+.bar{height:8px;border-radius:99px;background:var(--field);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:99px}
 
-/* Dock */
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -10px 24px -18px rgba(0,0,0,.35)}
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .dock-in{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px}
-.dock-sum{flex:1;min-width:0;border:0;background:none;text-align:left;padding:0;cursor:pointer;display:flex;flex-direction:column;line-height:1.15}
-.dock-sum span{font-size:13px;color:var(--muted)}
-.dock-sum strong{font-size:26px;font-weight:800;letter-spacing:-.02em}
-.dock-sum small{font-size:12.5px;color:var(--muted)}
-.dock .btn{height:50px}
-.dock .hint{font-size:14px;color:var(--muted);text-align:right;max-width:9em;line-height:1.25}
+.dock-sum{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.dock-sum span{font-size:13.5px;color:var(--muted)}
+.dock-sum strong{font-size:26px;font-weight:800}
+.dock-sum small{font-size:13px;color:var(--muted)}
 
-/* Sheet */
-dialog.sheet{margin:auto auto 0;width:100%;max-width:560px;max-height:88vh;border:0;padding:0;border-radius:20px 20px 0 0;background:var(--card);color:var(--ink);overflow:auto}
-dialog.sheet::backdrop{background:rgba(8,10,14,.45)}
-.sh{padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
-.sh-head{display:flex;align-items:flex-start;gap:12px}
-.sh-head h2{flex:1;margin:0;font-size:21px;font-weight:800;letter-spacing:-.015em;line-height:1.2}
-.sh-head .price{font-size:18px;font-weight:750}
-.sh .sub{color:var(--muted);margin:2px 0 12px;font-size:14px}
-.status{font-size:14px;font-weight:600;padding:8px 10px;border-radius:10px;background:var(--field);margin:0 0 10px}
-.status.warn{background:var(--cherry-soft);color:var(--cherry)}
-.status.ok{background:var(--leaf-soft);color:var(--leaf)}
-.prow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
-.prow .grow{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.prow .amt{color:var(--muted);font-size:14px;min-width:56px;text-align:right}
-.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden;flex:none}
-.stepper button{width:40px;height:38px;border:0;background:transparent;font-size:20px;font-weight:600;cursor:pointer;padding:0}
-.stepper button:disabled{opacity:.3;cursor:default}
-.stepper output{min-width:24px;text-align:center;font-weight:700}
-.sh-foot{display:flex;gap:8px;margin-top:14px}
-.sh-foot .btn{flex:1}
-.sh input[type=text]{width:100%;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--field);padding:0 12px;font-size:16px;margin-bottom:10px}
+dialog.sheet{margin:auto auto 0;width:100%;max-width:560px;max-height:90vh;border:0;padding:0;border-radius:20px 20px 0 0;background:var(--card);color:var(--ink);overflow:auto}
+dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
+.sh{padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.sh h2{margin:0 0 4px;font-size:21px}
+.sh .sub{color:var(--muted);margin:0 0 12px;font-size:14.5px}
+.sh-foot{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 
-.toast{
-  position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));z-index:20;
-  transform:translate(-50%,16px);opacity:0;pointer-events:none;
-  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;
-  max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s,transform .2s;
-}
-.toast.show{opacity:1;transform:translate(-50%,0)}
-@media (prefers-reduced-motion:reduce){.bar i,.toast{transition:none}}
+.group{display:flex;align-items:center;gap:8px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:20px 4px 8px}
+.count{font-size:13px;font-weight:800;border-radius:999px;padding:1px 9px;background:var(--field);color:var(--ink);letter-spacing:0}
+.count.warn{background:var(--warn-soft);color:var(--warn)}
+.count.ok{background:var(--ok-soft);color:var(--ok)}
+.st{font-weight:700}
+.st.warn{color:var(--warn)}
+.st.ok{color:var(--ok)}
+.who{color:var(--ink);font-weight:600}
+.banner.edit{display:flex;align-items:center;justify-content:space-between;gap:10px;background:color-mix(in srgb,var(--me) 14%,var(--card));color:var(--ink);position:sticky;top:64px;z-index:3}
+.card.attention{border-color:var(--warn);box-shadow:inset 4px 0 0 var(--warn)}
+.person-card{margin-bottom:0}
+.person-card.due{box-shadow:inset 4px 0 0 var(--warn)}
+.person-card.done{box-shadow:inset 4px 0 0 var(--ok)}
+.pc-head{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;min-height:44px;border-radius:10px}
+.pc-head::-webkit-details-marker{display:none}
+.chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.6;transition:transform .15s}
+.pc[open] .chev{transform:rotate(225deg);margin-bottom:-4px}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+.pc-total{font-size:18px}
+.mini-items{list-style:none;padding:0;margin:10px 0 0 38px;font-size:14.5px}
+.mini-items li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
+.more-acts{display:inline-block}
+.more-acts > summary{list-style:none}
+.more-acts > summary::-webkit-details-marker{display:none}
+.more-acts[open]{display:block;width:100%}
+.row.slotted{flex-direction:column;align-items:stretch;gap:0}
+.row-top{display:flex;align-items:center;gap:4px;padding-right:4px}
+.slots{display:flex;flex-wrap:wrap;gap:8px;padding:0 12px 12px 14px;align-items:center}
+.slot{width:40px;height:40px;border-radius:50%;padding:0;font-weight:800;font-size:15px;cursor:pointer;display:grid;place-items:center}
+.slot.open{border:2px dashed var(--line);background:transparent;color:var(--muted);font-size:20px;font-weight:600}
+.slot.taken{border:0;background:var(--pc);color:#fff;opacity:.55}
+.slot.mine{border:3px solid var(--card);background:var(--pc);color:#fff;box-shadow:0 0 0 2px var(--pc)}
+.slot:disabled{cursor:default}
+.slot.shared{font-size:12.5px;letter-spacing:-.02em}
+.slot.picked{outline:3px solid var(--ink);outline-offset:2px}
+.sheet-slots{padding:0 0 12px}
+.sheet-h{font-size:15px;margin:14px 0 4px}
+.slot-extra{color:var(--warn);font-weight:700;font-size:13.5px}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
+.toast.show{opacity:1}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--me);animation:sp 1s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}.toast{transition:none}}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><strong>Oct 17 tab</strong><span class="money">$444.98 with tax and 20% tip</span></div>
-    <button id="meBtn" class="me-btn" type="button" hidden></button>
+    <div class="brand"><strong id="title">Split a tab</strong><span id="subtitle" class="money"></span></div>
+    <button id="meBtn" class="chip-btn" type="button" hidden></button>
   </div>
-  <nav class="tabs" id="tabs" hidden>
-    <div class="tabs-in" role="tablist">
-      <button type="button" role="tab" data-view="claim" aria-selected="true">Claim items</button>
-      <button type="button" role="tab" data-view="every" aria-selected="false">Everyone</button>
-    </div>
-  </nav>
 </header>
-<div id="netbar" class="netbar" role="status" hidden>Can’t reach the tab right now. Your taps will sync when you’re back online.</div>
-
-<main class="wrap">
-  <section id="loading" class="loading">Loading the tab…</section>
-
-  <section id="joinView" class="join" hidden>
-    <h1>Split the tab</h1>
-    <p class="lede">Tap your name, then tap what you had. Your total includes your share of tax, the card fee and tip, and you can pay Nick right from here.</p>
-    <h2>Who are you?</h2>
-    <div id="names" class="names"></div>
-    <form id="joinForm" class="add" autocomplete="off">
-      <label class="sr" for="joinName">Your name</label>
-      <input id="joinName" type="text" placeholder="Not listed? Type your name" maxlength="24" enterkeyhint="go" autocapitalize="words" autocorrect="off">
-      <button class="btn" type="submit">Join</button>
-    </form>
-  </section>
-
-  <section id="claimView" hidden>
-    <div class="claim-top">
-      <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
-      <div class="bar-row"><span id="barLeft" class="money"></span><span id="barRight"></span></div>
-    </div>
-    <div class="seg filters" id="filters" role="group" aria-label="Show items">
-      <button type="button" data-f="all" aria-pressed="true">All</button>
-      <button type="button" data-f="open" id="fOpen" aria-pressed="false">Unclaimed</button>
-      <button type="button" data-f="mine" id="fMine" aria-pressed="false">Mine</button>
-    </div>
-    <div id="list"></div>
-    <div id="listEmpty" class="empty" hidden></div>
-    <p class="note">Tap an item to claim it. For drinks, tap once per drink. Use ⋯ to share an item or fix someone’s count.</p>
-  </section>
-
-  <section id="everyView" hidden></section>
-</main>
-
+<div id="netbar" class="netbar" role="status" hidden>Can’t reach the tab right now. Your taps will save when you’re back online.</div>
+<main class="wrap" id="app"><p class="muted" role="status">Loading…</p></main>
 <div class="dock" id="dock" hidden><div class="dock-in" id="dockIn"></div></div>
-<dialog id="sheet" class="sheet" aria-label="Details"><div id="sheetBody"></div></dialog>
+<dialog id="sheet" class="sheet" aria-labelledby="sheetTitle"><div id="sheetBody"></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <noscript><p style="padding:20px">This page needs JavaScript turned on.</p></noscript>
-
-<script>
-(() => {
-'use strict';
-
-/* ---------- Bill (amounts in cents) ---------- */
-const API = '/api/tab';
-const PAYER = 'nick';
-const VENMO = 'nick-szambelan';
-const NOTE = 'Oct 17 tab';
-const ITEMS = [
-  {id:'bloody',   name:'Bloody Mary',                       qty:1, cents:1000, cat:'Drinks'},
-  {id:'mojito',   name:'Door County Cherry Mojito',         qty:3, cents:3000, cat:'Drinks'},
-  {id:'vacay',    name:'Vacationland, Door County Brewing', qty:1, cents:600,  cat:'Drinks'},
-  {id:'lemonade', name:'Cherry Lemonade',                   qty:2, cents:1800, cat:'Drinks'},
-  {id:'carbliss', name:'Carbliss',                          qty:7, cents:4200, cat:'Drinks'},
-  {id:'shandy',   name:'Linneys Summer Shandy',             qty:1, cents:600,  cat:'Drinks'},
-  {id:'mule',     name:'Cherry Mule',                       qty:2, cents:2000, cat:'Drinks'},
-  {id:'cow',      name:'Spotted Cow',                       qty:9, cents:4500, cat:'Drinks'},
-  {id:'miller',   name:'Miller Light Draft',                qty:1, cents:300,  cat:'Drinks'},
-  {id:'rumple',   name:'Rumpleminz',                        qty:4, cents:1200, cat:'Drinks'},
-  {id:'fireball', name:'Fireball',                          qty:3, cents:900,  cat:'Drinks'},
-  {id:'curds',    name:'Cheese Curds',                      qty:3, cents:2685, cat:'Food', def:'share'},
-  {id:'csalad',   name:'Doco Cherry Salad',                 qty:1, cents:1995, cat:'Food'},
-  {id:'wrap',     name:'Fire Chicken Wrap',                 qty:1, cents:1495, cat:'Food'},
-  {id:'wings',    name:'Chicken Wings (12)',                qty:1, cents:1495, cat:'Food'},
-  {id:'hsalad',   name:'House Salad',                       qty:1, cents:1295, cat:'Food'},
-  {id:'pork',     name:'DoCo Pulled Pork',                  qty:1, cents:1295, cat:'Food'},
-  {id:'fish',     name:'Fish and Chips',                    qty:2, cents:3390, cat:'Food'},
-  {id:'philly',   name:'Philly Cheese Steak',               qty:1, cents:1695, cat:'Food'},
-];
-const SUB = 35445, TAX = 901, FEE = 1063, TIP = 7089, TOTAL = 44498, FEES = TAX + FEE;
-const PALETTE = ['#2F5BD3','#0E8A5C','#C2410C','#7C3AED','#0E7490','#BE185D','#4D7C0F','#A16207','#4338CA','#0F766E','#9D174D','#475569'];
-const ME_KEY = 'tab-me-2026-10-17';
-const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
-const $ = s => document.querySelector(s);
-const CHECK = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const DOTS = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>';
-
-/* ---------- State ---------- */
-let S = null;                    // latest state from the server
-let me = null;
-try { me = localStorage.getItem(ME_KEY); } catch (e) {}
-let view = 'claim', filter = 'all';
-const sticky = new Set();        // items touched since the filter changed stay visible
-const pend = new Map();          // "item|person" -> units not yet saved
-const pendModes = new Map();     // item -> 'count' | 'share' not yet saved
-const openPeople = new Set();
-let recOpen = false;
-let sheet = null;
-let lastActivity = Date.now(), lastChange = Date.now();
-
-/* ---------- Helpers ---------- */
-const fmt = c => '$' + (Math.round(c) / 100).toFixed(2);
-const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const initial = n => (Array.from(String(n).trim())[0] || '?').toUpperCase();
-const pc = p => PALETTE[((p && p.color) || 0) % PALETTE.length];
-const av = (p, cls = '') => `<span class="av ${cls}" style="--pc:${pc(p)}" aria-hidden="true">${esc(initial(p.name))}</span>`;
-function setHTML(el, html){ if (el._h !== html){ el._h = html; el.innerHTML = html; } }
-function venmoUrl(c){ return `https://venmo.com/${VENMO}?txn=pay&amount=${(Math.round(c) / 100).toFixed(2)}&note=${encodeURIComponent(NOTE)}&audience=private`; }
-function siteUrl(){ return location.origin + location.pathname; }
-function people(){
-  return Object.entries(S.people).map(([id, v]) => Object.assign({ id }, v))
-    .sort((a, b) => a.id === PAYER ? -1 : b.id === PAYER ? 1 : (a.t || 0) - (b.t || 0));
-}
-function units(i, p){
-  const k = i + '|' + p;
-  if (pend.has(k)) return pend.get(k);
-  return (S.claims[i] && S.claims[i][p]) || 0;
-}
-function modeOf(it){
-  if (it.qty < 2) return 'share';
-  return pendModes.get(it.id) || S.modes[it.id] || it.def || 'count';
-}
-
-/* ---------- Split math ---------- */
-function lineLabel(it, m, u, ent, tot, even){
-  if (m === 'count' && tot <= it.qty) return `${it.name} ×${u}`;
-  if (m === 'count') return `${it.name} ×${u} (${tot} claimed, ${it.qty} on bill)`;
-  if (ent.length === 1) return it.name;
-  return even ? `${it.name}, split ${ent.length} ways` : `${it.name}, ${u} of ${tot} shares`;
-}
-function compute(){
-  const ppl = people(), N = ppl.length;
-  const byId = {};
-  ppl.forEach(p => byId[p.id] = { p, sub:0, lines:[] });
-  const info = {};
-  let claimed = 0;
-  for (const it of ITEMS){
-    const m = modeOf(it);
-    const ent = ppl.map(p => [p.id, units(it.id, p.id)]).filter(([, u]) => u > 0);
-    const tot = ent.reduce((s, [, u]) => s + u, 0);
-    const out = {};
-    let c = 0, over = 0, left;
-    if (!ent.length) left = m === 'count' ? it.qty : 1;
-    else if (m === 'count' && tot <= it.qty){
-      const unit = it.cents / it.qty;
-      ent.forEach(([p, u]) => out[p] = u * unit);
-      c = tot * unit; left = it.qty - tot;
-    } else {
-      ent.forEach(([p, u]) => out[p] = it.cents * u / tot);
-      c = it.cents; left = 0;
-      if (m === 'count') over = tot - it.qty;
-    }
-    const even = ent.every(([, u]) => u === (ent[0] || [0, 0])[1]);
-    info[it.id] = { m, ent, tot, out, c, over, left, even, done: ent.length > 0 && left === 0 };
-    claimed += c;
-    ent.forEach(([p, u]) => { byId[p].sub += out[p]; byId[p].lines.push({ label:lineLabel(it, m, u, ent, tot, even), amt:out[p] }); });
-  }
-  const leftover = SUB - claimed > 0.5 ? SUB - claimed : 0;
-  if (S.leftover === 'split' && N && leftover){
-    const share = leftover / N;
-    ppl.forEach(p => { byId[p.id].sub += share; byId[p.id].lines.push({ label:'Share of unclaimed items', amt:share }); });
-  }
-  const res = ppl.map(p => {
-    const r = byId[p.id];
-    r.fees = r.sub * FEES / SUB;
-    r.tip = S.tip === 'even' ? TIP / N : r.sub * TIP / SUB;
-    r.exact = r.sub + r.fees + r.tip;
-    return r;
-  });
-  // Round to cents so everyone's totals add up exactly (largest remainder)
-  const target = Math.round(res.reduce((t, r) => t + r.exact, 0));
-  const cents = res.map(r => Math.floor(r.exact + 1e-9));
-  let rem = target - cents.reduce((a, b) => a + b, 0);
-  res.map((r, i) => [i, r.exact - Math.floor(r.exact + 1e-9)]).sort((a, b) => b[1] - a[1])
-     .forEach(([i]) => { if (rem > 0){ cents[i]++; rem--; } });
-  res.forEach((r, i) => {
-    r.total = cents[i];
-    r.subR = Math.round(r.sub); r.feesR = Math.round(r.fees); r.tipR = r.total - r.subR - r.feesR;
-    r.owed = r.p.id === PAYER ? 0 : r.total - (r.p.paid || 0);
-  });
-  const others = res.filter(r => r.p.id !== PAYER);
-  const collected = others.reduce((s, r) => s + (r.p.paid || 0), 0);
-  const expected = others.reduce((s, r) => s + r.total, 0);
-  const assigned = res.reduce((s, r) => s + r.total, 0);
-  const openItems = ITEMS.filter(it => !info[it.id].done);
-  return { ppl, res, byId, info, claimed, leftover, collected, expected, assigned, unassigned:TOTAL - assigned, openItems };
-}
-
-/* ---------- Server sync ---------- */
-async function post(body){
-  const r = await fetch(API, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(body), keepalive:true });
-  let d = {};
-  try { d = await r.json(); } catch (e) {}
-  if (!r.ok){ const err = new Error(d.error || 'Couldn’t save that. Check your connection.'); err.status = r.status; throw err; }
-  online(true);
-  return d;
-}
-function accept(st){
-  if (!st || typeof st.rev !== 'number') return;
-  if (S && st.rev < S.rev) return;            // ignore responses older than what we have
-  if (!S || st.rev !== S.rev) lastChange = Date.now();
-  S = st;
-  renderAll();
-}
-let flushT = null, flushing = false;
-function scheduleFlush(ms = 250){ clearTimeout(flushT); flushT = setTimeout(flush, ms); }
-async function flush(){
-  if (flushing){ scheduleFlush(150); return; }
-  if (!pend.size) return;
-  const changes = [...pend].map(([k, u]) => { const [i, p] = k.split('|'); return { i, p, u }; });
-  flushing = true;
-  try {
-    const r = await post({ op:'claims', changes });
-    changes.forEach(c => { const k = c.i + '|' + c.p; if (pend.get(k) === c.u) pend.delete(k); });
-    accept(r.state);
-  } catch (e) {
-    if (e.status === 400 || e.status === 404){
-      await poll(true);
-      for (const k of [...pend.keys()]) if (!S.people[k.split('|')[1]]) pend.delete(k);
-      if (e.status === 400) pend.clear();
-      toast(e.message); renderAll();
-      if (pend.size) scheduleFlush(300);
-    } else {
-      if (e.status !== 409) online(false);
-      scheduleFlush(e.status === 409 ? 400 : 3000);
-    }
-  } finally { flushing = false; }
-}
-async function act(body, okMsg){
-  try { const r = await post(body); accept(r.state); if (okMsg) toast(okMsg); return r; }
-  catch (e) { toast(e.message); poll(true); return null; }
-}
-let pollT = null, polling = false;
-function schedulePoll(){
-  clearTimeout(pollT);
-  if (document.hidden) return;
-  const busy = Date.now() - Math.max(lastActivity, lastChange) < 180000;
-  pollT = setTimeout(() => poll(), busy ? 2500 : 8000);
-}
-async function poll(full){
-  if (polling && !full) return;
-  polling = true;
-  try {
-    const r = await fetch(API + (S && !full ? `?rev=${S.rev}` : ''), { cache:'no-store' });
-    if (!r.ok) throw new Error(String(r.status));
-    const d = await r.json();
-    online(true);
-    if (!d.same) accept(d);
-  } catch (e) {
-    online(false);
-    if (!S) setHTML($('#loading'), 'Can’t load the tab. Check your connection. It will keep trying.');
-  } finally { polling = false; schedulePoll(); }
-}
-function online(ok){ $('#netbar').hidden = ok; }
-
-/* ---------- Actions ---------- */
-function setUnits(i, p, u){
-  lastActivity = Date.now();
-  pend.set(i + '|' + p, Math.max(0, Math.min(50, u)));
-  renderAll();
-  scheduleFlush();
-}
-async function setMode(i, m){
-  lastActivity = Date.now();
-  pendModes.set(i, m); renderAll();
-  try { const r = await post({ op:'mode', i, m }); if (pendModes.get(i) === m) pendModes.delete(i); accept(r.state); }
-  catch (e) { pendModes.delete(i); toast(e.message); renderAll(); }
-}
-function claimTap(it){
-  const m = modeOf(it), u = units(it.id, me);
-  if (m === 'count'){
-    const inf = compute().info[it.id];
-    if (inf.tot >= it.qty) toast(`All ${it.qty} were already claimed. Tap ⋯ to fix the counts.`);
-    setUnits(it.id, me, u + 1);
-  } else setUnits(it.id, me, u > 0 ? 0 : 1);
-}
-function setMe(id){
-  me = id;
-  try { if (id) localStorage.setItem(ME_KEY, id); else localStorage.removeItem(ME_KEY); } catch (e) {}
-  view = 'claim'; filter = 'all'; sticky.clear();
-  renderAll();
-  window.scrollTo(0, 0);
-}
-
-/* ---------- Rendering ---------- */
-function renderAll(){
-  if (!S){ $('#loading').hidden = false; return; }
-  if (me && !S.people[me]){ setMe(null); toast('You’re no longer on the tab. Tap your name to rejoin.'); return; }
-  const C = compute();
-  const mp = me ? S.people[me] : null;
-  document.documentElement.style.setProperty('--me', mp ? pc(mp) : PALETTE[0]);
-  $('#loading').hidden = true;
-  $('#meBtn').hidden = !mp;
-  $('#tabs').hidden = !mp;
-  $('#dock').hidden = !mp;
-  $('#joinView').hidden = !!mp;
-  $('#claimView').hidden = !mp || view !== 'claim';
-  $('#everyView').hidden = !mp || view !== 'every';
-  document.querySelectorAll('#tabs [data-view]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === view)));
-  if (!mp){ renderJoin(C); if (sheet) closeSheet(); return; }
-  setHTML($('#meBtn'), `${av(mp)}<span class="nm">${esc(mp.name)}</span><small>Switch</small>`);
-  renderClaim(C);
-  renderEvery(C);
-  renderDock(C);
-  if (sheet) renderSheet(C);
-}
-
-function renderJoin(C){
-  setHTML($('#names'), C.ppl.map(p => `
-    <button type="button" class="name-btn" data-act="pick" data-p="${p.id}">
-      ${av(p, 'lg')}<span><b>${esc(p.name)}</b>${p.id === PAYER ? '<small>Paid the bill</small>' : ''}</span>
-    </button>`).join(''));
-}
-
-let listBuilt = false;
-function buildList(){
-  $('#list').innerHTML = ['Drinks', 'Food'].map(g => `
-    <div class="group" data-g="${g}"><h3>${g}</h3><div class="rows">${
-      ITEMS.filter(i => i.cat === g).map(i => `<div class="row" id="r-${i.id}"></div>`).join('')}</div></div>`).join('');
-  listBuilt = true;
-}
-function avStack(ent){
-  if (!ent.length) return '';
-  const shown = ent.slice(0, 4).map(([p]) => av(S.people[p])).join('');
-  return `<span class="avs">${shown}${ent.length > 4 ? `<span class="av more">+${ent.length - 4}</span>` : ''}</span>`;
-}
-function rowHtml(it, inf){
-  const m = inf.m, myU = units(it.id, me), mine = myU > 0, unit = it.cents / it.qty;
-  const meta = [];
-  if (m === 'count'){
-    meta.push(`<span class="money">${fmt(unit)} each</span>`);
-    if (inf.over > 0) meta.push(`<em>${inf.over} too many claimed</em>`);
-    else if (!inf.tot) meta.push(`<em>none claimed</em>`);
-    else if (inf.left > 0) meta.push(`<em>${inf.left} left</em>`);
-    else meta.push('<span>all claimed</span>');
-  } else {
-    meta.push(`<span class="money">${fmt(it.cents)}</span>`);
-    if (!inf.ent.length) meta.push('<em>unclaimed</em>');
-    else if (inf.ent.length > 1) meta.push(`<span>split ${inf.ent.length} ways</span>`);
-  }
-  if (mine) meta.push(`<b class="money">You ${fmt(inf.out[me])}</b>`);
-  meta.push(avStack(inf.ent));
-  let ctl;
-  if (m === 'count'){
-    ctl = mine
-      ? `<span class="step"><button type="button" data-act="dec" data-i="${it.id}" aria-label="One fewer ${esc(it.name)}">−</button><output>${myU}</output><button type="button" data-act="inc" data-i="${it.id}" aria-label="One more ${esc(it.name)}">+</button></span>`
-      : `<button type="button" class="plus" data-act="inc" data-i="${it.id}" aria-label="Claim one ${esc(it.name)}">+</button>`;
-  } else {
-    ctl = `<button type="button" class="tick${mine ? ' on' : ''}" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="${mine ? 'Unclaim' : 'Claim'} ${esc(it.name)}">${CHECK}</button>`;
-  }
-  return `<button type="button" class="r-main" data-act="main" data-i="${it.id}">
-      <span class="r-name">${esc(it.name)}${it.qty > 1 ? `<span class="r-qty">×${it.qty}</span>` : ''}</span>
-      <span class="r-meta">${meta.join('')}</span>
-    </button>
-    <span class="r-ctl">${ctl}</span>
-    <button type="button" class="r-more" data-act="more" data-i="${it.id}" aria-label="Split options for ${esc(it.name)}">${DOTS}</button>`;
-}
-function renderClaim(C){
-  if (!listBuilt) buildList();
-  const pct = Math.min(1, C.claimed / SUB);
-  const fill = $('#barFill');
-  fill.style.width = (pct * 100).toFixed(1) + '%';
-  fill.classList.toggle('full', !C.openItems.length);
-  $('#barLeft').textContent = `${fmt(C.claimed)} of ${fmt(SUB)} claimed`;
-  $('#barRight').textContent = C.openItems.length ? `${C.openItems.length} ${C.openItems.length === 1 ? 'item' : 'items'} left` : 'Everything’s claimed';
-  let mineCount = 0, visible = 0;
-  for (const it of ITEMS){
-    const inf = C.info[it.id], myU = units(it.id, me);
-    if (myU > 0) mineCount++;
-    const el = document.getElementById('r-' + it.id);
-    const cls = 'row' + (myU > 0 ? ' mine' : '');
-    if (el.className !== cls) el.className = cls;
-    setHTML(el, rowHtml(it, inf));
-    const show = filter === 'all' || sticky.has(it.id) || (filter === 'open' ? (!inf.done || inf.over > 0) : myU > 0);
-    el.hidden = !show;
-    if (show) visible++;
-  }
-  document.querySelectorAll('#list .group').forEach(g => { g.hidden = !g.querySelector('.row:not([hidden])'); });
-  $('#fOpen').textContent = `Unclaimed ${C.openItems.length}`;
-  $('#fMine').textContent = `Mine ${mineCount}`;
-  document.querySelectorAll('#filters button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
-  const empty = $('#listEmpty');
-  empty.hidden = visible > 0;
-  if (!visible) empty.textContent = filter === 'open' ? 'Everything on the bill has been claimed.' : 'You haven’t claimed anything yet. Switch to All and tap what you had.';
-}
-
-function statusPill(r){
-  const p = r.p;
-  if (p.id === PAYER) return '<span class="pill">Paid the bill</span>';
-  if (p.paid == null) return r.total ? '<span class="pill todo">Owes</span>' : '<span class="pill">Nothing yet</span>';
-  if (Math.abs(r.owed) <= 1) return p.ok ? '<span class="pill done">Paid ✓</span>' : '<span class="pill done">Says paid</span>';
-  if (r.owed > 1) return `<span class="pill todo money">Owes ${fmt(r.owed)} more</span>`;
-  return `<span class="pill money">Overpaid ${fmt(-r.owed)}</span>`;
-}
-function linesHtml(r){
-  if (!r.lines.length) return '<p class="sumline">Nothing claimed yet.</p>';
-  return `<ul class="lines">${r.lines.map(l => `<li><span>${esc(l.label)}</span><span class="money">${fmt(l.amt)}</span></li>`).join('')}</ul>
-    <p class="sumline money">Items ${fmt(r.subR)} + tax and card fee ${fmt(r.feesR)} + tip ${fmt(r.tipR)}</p>`;
-}
-function personRow(r, host){
-  const p = r.p, isPayer = p.id === PAYER;
-  let acts = '';
-  if (host && !isPayer){
-    if (p.paid != null && !p.ok && Math.abs(r.owed) <= 1) acts += `<button type="button" class="btn sm" data-act="confirm" data-p="${p.id}">Got it</button>`;
-    if (r.total && (p.paid == null || r.owed > 1)) acts += `<button type="button" class="btn sm ghost" data-act="cash" data-p="${p.id}">Mark paid ${fmt(r.owed)}</button>`;
-    if (p.paid != null) acts += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${p.id}">Undo payment</button>`;
-    acts += `<button type="button" class="btn sm ghost" data-act="remove" data-p="${p.id}">Remove</button>`;
-  }
-  return `<details class="person" data-p="${p.id}"${openPeople.has(p.id) ? ' open' : ''}>
-    <summary>${av(p)}<span class="p-name"><span class="who">${esc(p.name)}${p.id === me ? ' <span class="muted">(you)</span>' : ''}</span>${statusPill(r)}</span><span class="p-amt money">${fmt(r.total)}</span></summary>
-    <div class="p-body">${linesHtml(r)}${p.paid != null && !isPayer ? `<p class="sumline money">Paid ${fmt(p.paid)}${p.ok ? ', confirmed by Nick' : ''}</p>` : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div>
-  </details>`;
-}
-function renderEvery(C){
-  const host = me === PAYER;
-  const claimPct = Math.min(1, C.claimed / SUB), payPct = C.expected ? Math.min(1, C.collected / C.expected) : 0;
-  let h = `<div class="card">
-    <div class="stats">
-      <div class="stat"><strong class="money">${Math.floor(claimPct * 100)}%</strong><span>of items claimed</span><div class="bar"><i class="${C.openItems.length ? '' : 'full'}" style="width:${(claimPct * 100).toFixed(1)}%"></i></div></div>
-      <div class="stat"><strong class="money">${fmt(C.collected)}</strong><span class="money">paid back of ${fmt(C.expected)}</span><div class="bar"><i class="${payPct >= 1 && C.expected ? 'full' : ''}" style="width:${(payPct * 100).toFixed(1)}%"></i></div></div>
-    </div>
-    <details class="rec"${recOpen ? ' open' : ''}><summary>Receipt breakdown</summary>
-      <ul class="tape money">
-        <li><span>Items</span><i></i><span>${fmt(SUB)}</span></li>
-        <li><span>Tax</span><i></i><span>${fmt(TAX)}</span></li>
-        <li><span>Card fee (3%)</span><i></i><span>${fmt(FEE)}</span></li>
-        <li><span>Tip (20%)</span><i></i><span>${fmt(TIP)}</span></li>
-        <li class="tot"><span>Total</span><i></i><span>${fmt(TOTAL)}</span></li>
-      </ul>
-      <p class="note">Tax and the card fee follow what each person ordered. Tip is split ${S.tip === 'even' ? 'evenly' : 'by what each person ordered'}.</p>
-    </details>
-  </div>`;
-
-  if (C.openItems.length){
-    h += `<div class="card"><h3>Nobody’s claimed these yet</h3><ul class="mini">${C.openItems.map(it => {
-      const inf = C.info[it.id];
-      const label = inf.m === 'count' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
-      const amt = inf.m === 'count' ? it.cents / it.qty * inf.left : it.cents;
-      const btn = inf.m === 'count' && inf.left > 1 ? 'I had one' : 'I had it';
-      return `<li><span class="grow">${esc(label)}<small class="money">${fmt(amt)}</small></span><button type="button" class="btn sm ghost" data-act="claimone" data-i="${it.id}">${btn}</button></li>`;
-    }).join('')}</ul>`;
-    if (S.leftover === 'split'){
-      h += `<p class="note money">These ${fmt(C.leftover)} are split evenly across everyone for now.</p>`;
-      if (host) h += `<div class="acts"><button type="button" class="btn sm ghost" data-act="leftover" data-v="hold">Stop splitting them</button></div>`;
-    } else if (host){
-      h += `<p class="note">If nobody claims them, split them across everyone so you’re not covering them.</p><div class="acts"><button type="button" class="btn sm" data-act="leftover" data-v="split">Split ${fmt(C.leftover)} evenly</button></div>`;
-    } else {
-      h += '<p class="note">If nobody claims these, Nick may split them across everyone.</p>';
-    }
-    h += '</div>';
-  }
-
-  const overs = ITEMS.filter(it => C.info[it.id].over > 0);
-  if (overs.length){
-    h += `<div class="card"><h3>Claimed too many times</h3><ul class="mini">${overs.map(it =>
-      `<li><span class="grow">${esc(it.name)}<small>${C.info[it.id].tot} claimed, the receipt has ${it.qty}</small></span><button type="button" class="btn sm ghost" data-act="fix" data-i="${it.id}">Fix</button></li>`).join('')}</ul>
-      <p class="note">Until it’s fixed, everyone who claimed it pays a smaller share.</p></div>`;
-  }
-
-  h += `<div class="card"><h3>Who owes what</h3>${C.res.map(r => personRow(r, host)).join('')}
-    <p class="note money">${C.unassigned > 0 ? `Adds up to ${fmt(C.assigned)} of ${fmt(TOTAL)}. ${fmt(C.unassigned)} is still unclaimed.` : `Adds up to ${fmt(C.assigned)}, the full check.`}</p></div>`;
-
-  if (host){
-    h += `<div class="card"><h3>Your tools</h3>
-      <div class="set-row"><span>Tip</span><div class="seg" role="group" aria-label="How to split the tip">
-        <button type="button" data-act="tip" data-v="prop" aria-pressed="${S.tip !== 'even'}">By what they ordered</button>
-        <button type="button" data-act="tip" data-v="even" aria-pressed="${S.tip === 'even'}">Evenly</button></div></div>
-      <div class="acts"><button type="button" class="btn" data-act="nudge">Nudge the group</button><button type="button" class="btn ghost" data-act="share">Copy link</button></div>
-      <p class="note">Nudge writes a message with the link, anything unclaimed, and who still owes you.</p></div>`;
-  } else {
-    h += `<div class="card"><h3>Not everyone here yet?</h3><p class="note" style="margin:0 0 10px">Send them the link so they can claim their items.</p><button type="button" class="btn ghost" data-act="share">Share the link</button></div>`;
-  }
-  setHTML($('#everyView'), h);
-}
-
-function renderDock(C){
-  const r = C.byId[me];
-  let left, right = '';
-  if (me === PAYER){
-    left = `<span>Paid back to you</span><strong class="money">${fmt(C.collected)}</strong><small class="money">of ${fmt(C.expected)} from friends</small>`;
-    right = '<button type="button" class="btn" data-act="nudge">Nudge group</button>';
-  } else {
-    const p = r.p;
-    if (!r.total && p.paid == null){
-      left = '<span>Your total</span><strong class="money">$0.00</strong><small>Tax and tip get added in</small>';
-      right = '<span class="hint">Tap what you had</span>';
-    } else if (p.paid != null && Math.abs(r.owed) <= 1){
-      left = `<span>You’re all square</span><strong class="money">${fmt(r.total)}</strong><small>${p.ok ? 'Nick confirmed it' : 'Marked as paid'}</small>`;
-      right = '<button type="button" class="btn ghost" data-act="mine">Details</button>';
-    } else if (r.owed > 1){
-      left = `<span>${p.paid != null ? 'You owe Nick a bit more' : 'You owe Nick'}</span><strong class="money">${fmt(r.owed)}</strong><small>Tax and tip included</small>`;
-      right = `<a class="btn" href="${venmoUrl(r.owed)}" target="_blank" rel="noopener" data-act="pay" data-amt="${r.owed}">Pay on Venmo</a>`;
-    } else {
-      left = `<span>Nick owes you</span><strong class="money">${fmt(-r.owed)}</strong><small>You paid a bit extra</small>`;
-      right = '<button type="button" class="btn ghost" data-act="mine">Details</button>';
-    }
-  }
-  setHTML($('#dockIn'), `<button type="button" class="dock-sum" data-act="mine" aria-label="See your breakdown">${left}</button>${right}`);
-}
-
-/* ---------- Sheets ---------- */
-const dlg = $('#sheet');
-function openSheet(s){
-  sheet = s;
-  renderSheet(compute());
-  if (!dlg.open){ if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
-}
-function closeSheet(){ sheet = null; if (dlg.open){ if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); } }
-dlg.addEventListener('close', () => { sheet = null; const b = $('#sheetBody'); b._h = null; b.innerHTML = ''; });
-dlg.addEventListener('click', e => { if (e.target === dlg) closeSheet(); });
-
-function renderSheet(C){
-  const body = $('#sheetBody');
-  const x = '<button type="button" class="btn sm ghost" data-act="close" aria-label="Close">Done</button>';
-  if (sheet.type === 'item'){
-    const it = ITEM[sheet.i], inf = C.info[it.id], m = inf.m;
-    let status;
-    if (m === 'count'){
-      if (inf.over > 0) status = `<p class="status warn">${inf.tot} claimed, but the receipt has ${it.qty}. Lower the count for whoever didn’t have one.</p>`;
-      else if (!inf.tot) status = `<p class="status warn">None of the ${it.qty} claimed yet</p>`;
-      else if (inf.left > 0) status = `<p class="status">${inf.left} of ${it.qty} still unclaimed</p>`;
-      else status = `<p class="status ok">All ${it.qty} claimed</p>`;
-    } else {
-      status = !inf.ent.length ? '<p class="status warn">Nobody has claimed this yet</p>'
-        : `<p class="status ok">${inf.ent.length === 1 ? 'Claimed' : inf.even ? `Split evenly ${inf.ent.length} ways` : 'Custom split'}</p>`;
-    }
-    const seg = it.qty > 1 ? `<div class="seg" role="group" aria-label="How to split ${esc(it.name)}" style="margin-bottom:10px">
-        <button type="button" data-act="mode" data-m="count" aria-pressed="${m === 'count'}">Count each one</button>
-        <button type="button" data-act="mode" data-m="share" aria-pressed="${m === 'share'}">Share it</button></div>` : '';
-    const help = m === 'count' ? 'Set how many each person had. You can fix anyone’s count here.'
-      : 'Everyone with 1 share pays the same. Give someone 2 shares if they had twice as much.';
-    const order = [me, ...C.ppl.map(p => p.id).filter(id => id !== me)];
-    const rows = order.map(pid => {
-      const p = S.people[pid], n = units(it.id, pid), amt = inf.out[pid] || 0;
-      return `<div class="prow">${av(p)}<span class="grow">${pid === me ? 'You' : esc(p.name)}</span><span class="amt money">${amt ? fmt(amt) : ''}</span>
-        <span class="stepper"><button type="button" data-act="sdec" data-p="${pid}" aria-label="One less for ${esc(p.name)}"${n <= 0 ? ' disabled' : ''}>−</button><output>${n}</output><button type="button" data-act="sinc" data-p="${pid}" aria-label="One more for ${esc(p.name)}"${n >= (m === 'count' ? 50 : 20) ? ' disabled' : ''}>+</button></span></div>`;
-    }).join('');
-    const extra = m === 'share' ? `<div class="sh-foot"><button type="button" class="btn ghost" data-act="sall">Everyone shared it</button><button type="button" class="btn ghost" data-act="sclear">Clear</button></div>` : '';
-    setHTML(body, `<div class="sh">
-      <div class="sh-head"><h2>${esc(it.name)}</h2><span class="price money">${fmt(it.cents)}</span></div>
-      <p class="sub money">${it.qty > 1 ? `${it.qty} × ${fmt(it.cents / it.qty)}. ` : ''}${help}</p>
-      ${seg}${status}${rows}${extra}
-      <div class="sh-foot"><button type="button" class="btn" data-act="close">Done</button></div></div>`);
-  } else if (sheet.type === 'me'){
-    const r = C.byId[me], p = r.p, isPayer = me === PAYER;
-    let pay = '';
-    if (!isPayer){
-      if (r.owed > 1) pay = `<div class="sh-foot"><a class="btn" href="${venmoUrl(r.owed)}" target="_blank" rel="noopener" data-act="pay" data-amt="${r.owed}">Pay ${fmt(r.owed)} on Venmo</a></div>
-        <div class="sh-foot"><button type="button" class="btn ghost" data-act="paidother" data-amt="${r.owed}">I paid another way</button></div>`;
-      if (p.paid != null && !p.ok) pay += `<div class="sh-foot"><button type="button" class="btn ghost" data-act="unpaidme">Undo my payment</button></div>`;
-    }
-    setHTML(body, `<div class="sh">
-      <div class="sh-head"><h2>${isPayer ? 'Your share' : 'Your total'}</h2><span class="price money">${fmt(r.total)}</span></div>
-      <p class="sub">${isPayer ? 'What your own items cost, so you can see what friends owe you.' : 'Your items, plus your share of tax, the 3% card fee and the tip.'}</p>
-      ${linesHtml(r)}
-      ${!isPayer && p.paid != null ? `<p class="status ${Math.abs(r.owed) <= 1 ? 'ok' : ''} money">You marked ${fmt(p.paid)} as paid${p.ok ? ', and Nick confirmed it' : ''}.</p>` : ''}
-      ${pay}
-      <div class="sh-foot"><button type="button" class="btn ghost" data-act="close">Close</button></div></div>`);
-  } else if (sheet.type === 'paycheck'){
-    const warn = C.openItems.length && S.leftover !== 'split'
-      ? '<p class="status">A few items are still unclaimed. If Nick splits them later, you might owe a little more.</p>' : '';
-    setHTML(body, `<div class="sh">
-      <div class="sh-head"><h2>Did your Venmo go through?</h2></div>
-      <p class="sub">Mark it here so Nick knows you’re square.</p>${warn}
-      <div class="sh-foot"><button type="button" class="btn" data-act="paidyes">Yes, I paid ${fmt(sheet.amt)}</button></div>
-      <div class="sh-foot"><button type="button" class="btn ghost" data-act="close">Not yet</button></div></div>`);
-  } else if (sheet.type === 'who'){
-    const p = S.people[me];
-    if (!body.querySelector('#renameInput')){
-      body._h = null;
-      body.innerHTML = `<div class="sh">
-        <div class="sh-head"><h2>You’re ${esc(p.name)}</h2>${x}</div>
-        <p class="sub">Fix a typo in your name, or switch if this isn’t you.</p>
-        <form id="renameForm"><label class="sr" for="renameInput">Your name</label>
-          <input id="renameInput" type="text" maxlength="24" value="${esc(p.name)}" autocapitalize="words" autocorrect="off">
-          <button class="btn" type="submit" style="width:100%">Save name</button></form>
-        <div class="sh-foot"><button type="button" class="btn ghost" data-act="switch">I’m not ${esc(p.name)}</button></div></div>`;
-    }
-  }
-}
-
-$('#sheetBody').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b || !sheet) return;
-  const a = b.dataset.act;
-  if (a === 'close'){ closeSheet(); return; }
-  if (a === 'pay'){ afterPay(Number(b.dataset.amt)); return; }
-  if (a === 'switch'){ closeSheet(); setMe(null); return; }
-  if (a === 'paidyes'){ const amt = sheet.amt, p = S.people[me]; closeSheet(); act({ op:'paid', p:me, paid:(p.paid || 0) + Math.round(amt), ok:false }, 'Marked as paid. Thanks!'); return; }
-  if (a === 'paidother'){ const amt = Number(b.dataset.amt); const p = S.people[me]; closeSheet(); act({ op:'paid', p:me, paid:(p.paid || 0) + Math.round(amt), ok:false }, 'Marked as paid. Thanks!'); return; }
-  if (a === 'unpaidme'){ closeSheet(); act({ op:'paid', p:me, paid:null }, 'Payment undone'); return; }
-  if (sheet.type !== 'item') return;
-  const it = ITEM[sheet.i], pid = b.dataset.p;
-  if (a === 'mode'){ setMode(it.id, b.dataset.m); return; }
-  if (a === 'sinc') setUnits(it.id, pid, units(it.id, pid) + 1);
-  if (a === 'sdec') setUnits(it.id, pid, units(it.id, pid) - 1);
-  if (a === 'sall') people().forEach(p => { if (!units(it.id, p.id)) setUnits(it.id, p.id, 1); });
-  if (a === 'sclear') people().forEach(p => { if (units(it.id, p.id)) setUnits(it.id, p.id, 0); });
-  if (e.detail === 0) refocus(`#sheetBody [data-act="${a}"]${pid ? `[data-p="${pid}"]` : ''}`);
-});
-$('#sheetBody').addEventListener('submit', e => {
-  if (e.target.id !== 'renameForm') return;
-  e.preventDefault();
-  const name = $('#renameInput').value.trim();
-  if (!name) return;
-  closeSheet();
-  act({ op:'rename', p:me, name }, 'Name updated');
-});
-// After the Venmo link opens, ask whether the payment went through
-function afterPay(amt){
-  setTimeout(() => openSheet({ type:'paycheck', amt }), 700);
-}
-
-/* ---------- Events ---------- */
-function refocus(sel){ requestAnimationFrame(() => { const el = document.querySelector(sel); if (el && !el.disabled) el.focus({ preventScroll:true }); }); }
-
-$('#names').addEventListener('click', e => {
-  const b = e.target.closest('[data-act="pick"]'); if (!b) return;
-  setMe(b.dataset.p);
-  const p = S.people[b.dataset.p];
-  if (p) toast(`Hi ${p.name}! Tap what you had.`);
-});
-$('#joinForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const input = $('#joinName'), name = input.value.trim();
-  if (!name){ input.focus(); return; }
-  const btn = e.target.querySelector('button'); btn.disabled = true;
-  const existed = Object.values(S ? S.people : {}).some(p => p.name.toLowerCase() === name.toLowerCase());
-  const r = await act({ op:'join', name });
-  btn.disabled = false;
-  if (r && r.person){ input.value = ''; setMe(r.person); toast(existed ? `Welcome back, ${S.people[r.person].name}` : `Hi ${S.people[r.person].name}! Tap what you had.`); }
-});
-$('#meBtn').addEventListener('click', () => openSheet({ type:'who' }));
-document.querySelectorAll('#tabs [data-view]').forEach(b => b.addEventListener('click', () => {
-  view = b.dataset.view; renderAll(); window.scrollTo(0, 0);
-}));
-document.querySelectorAll('#filters button').forEach(b => b.addEventListener('click', () => {
-  filter = b.dataset.f; sticky.clear(); renderAll();
-}));
-$('#list').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b || !me) return;
-  const it = ITEM[b.dataset.i]; if (!it) return;
-  sticky.add(it.id);
-  const a = b.dataset.act, u = units(it.id, me);
-  if (a === 'main') claimTap(it);
-  else if (a === 'inc') claimTap(it);
-  else if (a === 'dec') setUnits(it.id, me, u - 1);
-  else if (a === 'toggle') setUnits(it.id, me, u > 0 ? 0 : 1);
-  else if (a === 'more'){ openSheet({ type:'item', i:it.id }); return; }
-  if (e.detail === 0) refocus(`#r-${it.id} [data-act="${a}"]`);
-});
-$('#everyView').addEventListener('toggle', e => {
-  const d = e.target;
-  if (d.classList && d.classList.contains('person')){ if (d.open) openPeople.add(d.dataset.p); else openPeople.delete(d.dataset.p); }
-  if (d.classList && d.classList.contains('rec')) recOpen = d.open;
-}, true);
-$('#everyView').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b) return;
-  const a = b.dataset.act, pid = b.dataset.p;
-  const C = compute();
-  if (a === 'claimone'){ const it = ITEM[b.dataset.i]; claimTap(it); toast(`Claimed ${it.name}`); return; }
-  if (a === 'fix'){ openSheet({ type:'item', i:b.dataset.i }); return; }
-  if (a === 'leftover'){ act({ op:'settings', leftover:b.dataset.v }, b.dataset.v === 'split' ? 'Unclaimed items are now split evenly' : 'Unclaimed items are no longer split'); return; }
-  if (a === 'tip'){ act({ op:'settings', tip:b.dataset.v }); return; }
-  if (a === 'nudge'){ nudge(C); return; }
-  if (a === 'share'){ shareLink(); return; }
-  const r = C.byId[pid]; if (!r) return;
-  if (a === 'confirm') act({ op:'paid', p:pid, paid:r.p.paid, ok:true }, `Confirmed ${r.p.name}’s payment`);
-  if (a === 'cash') act({ op:'paid', p:pid, paid:r.total, ok:true }, `${r.p.name} marked as paid`);
-  if (a === 'unpaid') act({ op:'paid', p:pid, paid:null }, 'Payment undone');
-  if (a === 'remove'){
-    if (!confirm(`Remove ${r.p.name}? Their claims go back to unclaimed.`)) return;
-    openPeople.delete(pid);
-    act({ op:'remove', p:pid }, `${r.p.name} removed`);
-  }
-});
-$('#dockIn').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b) return;
-  const a = b.dataset.act;
-  if (a === 'mine') openSheet({ type:'me' });
-  if (a === 'pay') afterPay(Number(b.dataset.amt));
-  if (a === 'nudge') nudge(compute());
-});
-
-/* ---------- Sharing ---------- */
-function nudgeText(C){
-  const out = [`Splitting the Oct 17 tab. Tap your name and claim what you had: ${siteUrl()}`];
-  if (C.openItems.length) out.push('', 'Still unclaimed: ' + C.openItems.map(it => {
-    const inf = C.info[it.id];
-    return inf.m === 'count' && it.qty > 1 ? `${inf.left} ${it.name}` : it.name;
-  }).join(', '));
-  const owing = C.res.filter(r => r.p.id !== PAYER && r.owed > 1);
-  if (owing.length) out.push('', 'Still owe: ' + owing.map(r => `${r.p.name} ${fmt(r.owed)}`).join(', '));
-  out.push('', `Venmo @${VENMO}`);
-  return out.join('\n');
-}
-async function nudge(C){
-  const text = nudgeText(C);
-  if (navigator.share){
-    try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
-  }
-  copy(text, 'Message copied. Paste it in the group chat.');
-}
-async function shareLink(){
-  const url = siteUrl();
-  if (navigator.share){
-    try { await navigator.share({ title:'Oct 17 tab', text:'Tap your name and claim what you had:', url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
-  }
-  copy(url, 'Link copied');
-}
-async function copy(text, msg){
-  try { await navigator.clipboard.writeText(text); toast(msg); return; } catch (e) {}
-  const ta = document.createElement('textarea');
-  ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast(msg); } catch (e) { toast('Couldn’t copy here. Long-press to copy instead.'); }
-  ta.remove();
-}
-let toastT;
-function toast(msg){
-  const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800);
-}
-
-/* ---------- Start ---------- */
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) clearTimeout(pollT);
-  else { lastActivity = Date.now(); poll(); if (pend.size) scheduleFlush(50); }
-});
-window.addEventListener('online', () => { poll(); if (pend.size) scheduleFlush(50); });
-window.addEventListener('pagehide', () => { if (pend.size) flush(); });
-poll(true);
-})();
-</script>
+<script type="module" src="/app.mjs"></script>
 </body>
 </html>
