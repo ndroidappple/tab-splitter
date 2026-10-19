@@ -360,10 +360,10 @@ function renderAll() {
   if (!mp) { renderJoin(); $('#dock').hidden = true; if (sheet) closeSheet(); return; }
   let html = '';
   if (T.closed) html += `<p class="banner ok">This tab is closed. Thanks, everyone.</p>`;
-  if (isHost) html += `<div class="seg" role="tablist" aria-label="Host view">
+  html += `<div class="seg" role="tablist" aria-label="View">
       <button type="button" role="tab" data-act="view" data-v="people" aria-selected="${view === 'people'}">People</button>
       <button type="button" role="tab" data-act="view" data-v="items" aria-selected="${view === 'items'}">Items</button></div>`;
-  html += isHost && view === 'people' ? hostPanel(C) : itemsList(C);
+  html += view === 'people' ? peoplePanel(C) : itemsList(C);
   setHTML(app, html);
   renderDock(C);
   if (sheet) renderSheet(C);
@@ -459,15 +459,15 @@ function itemRowHtml(it, C, target) {
 
 function statusOf(r) {
   const p = r.p;
-  if (p.id === HOST) return ['', 'Paid the bill'];
+  if (p.id === HOST) return ['', `Paid the bill · own share ${fmt(r.total)}`];
   if (p.waived && r.settled) return ['done', p.paid ? `Paid ${fmt(p.paid)}, rest let go` : 'Let go'];
-  if (p.paid != null && r.owed <= SLACK) return p.ok ? ['done', 'Paid ✓'] : ['done', `Says paid ${fmt(p.paid)}. Check Venmo`];
+  if (p.paid != null && r.owed <= SLACK) return p.ok ? ['done', 'Paid ✓'] : ['done', isHost ? `Says paid ${fmt(p.paid)}. Check Venmo` : `Paid ${fmt(p.paid)}`];
   if (p.paid != null) return ['due', `Paid ${fmt(p.paid)}, owes ${fmt(r.owed)} more`];
   if (!r.total) return ['due', 'No items yet'];
   return ['due', `Owes ${fmt(r.owed)}`];
 }
 
-function hostPanel(C) {
+function peoplePanel(C) {
   const others = C.res.filter((r) => r.p.id !== HOST);
   const pct = C.expected ? Math.min(100, Math.round((C.collected / C.expected) * 100)) : 0;
   let html = `<div class="card"><h3 class="money">${fmt(C.collected)} of ${fmt(C.expected)} paid back</h3>
@@ -476,28 +476,29 @@ function hostPanel(C) {
   if (C.openItems.length || Math.abs(C.pool) > SLACK) {
     const n = C.openItems.length;
     html += `<div class="card attention"><h3 class="money">${n ? `${n} ${n === 1 ? 'item needs' : 'items need'} someone` : 'Not covered yet'} · ${fmt(C.pool)}</h3>
-      <p class="note" style="margin-top:0">Until it’s settled, this is on you.</p>`;
+      <p class="note" style="margin-top:0">${isHost ? 'Until it’s settled, this is on you.' : `Nobody has claimed these yet, so ${esc(T.payer.name)} is covering them for now.`}</p>`;
     if (n) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
         const what = inf.m === 'count' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
-        return `<li><span>${esc(what)}</span><button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Assign</button></li>`;
+        return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Assign</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
       }).join('')}</ul>`;
     }
-    if (!T.closed) {
+    if (!T.closed && isHost) {
       html += `<div class="acts"><button type="button" class="btn sm" data-act="pool" data-v="spread">Split across everyone who hasn’t paid</button>
         <button type="button" class="btn sm ghost" data-act="pool" data-v="cover">I’ll cover it</button></div>`;
     }
     html += '</div>';
   } else if (T.pool) {
-    html += `<p class="banner ok">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : 'You’re covering anything unclaimed.'} <button type="button" class="link" data-act="pool" data-v="none">Undo</button></p>`;
+    html += `<p class="banner ok">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : `${isHost ? 'You’re' : esc(T.payer.name) + ' is'} covering anything unclaimed.`}${isHost ? ' <button type="button" class="link" data-act="pool" data-v="none">Undo</button>' : ''}</p>`;
   }
 
   html += `<h2 class="group">People <span class="count">${others.length + 1}</span></h2>
     <div class="stack">${[C.byId[HOST], ...others].map((r) => personCard(r)).join('')}</div>
-    ${T.closed ? '' : `<form id="addPerson" class="row2" style="margin-top:12px" autocomplete="off"><label class="sr" for="addPersonName">Add someone</label>
+    ${T.closed || !isHost ? '' : `<form id="addPerson" class="row2" style="margin-top:12px" autocomplete="off"><label class="sr" for="addPersonName">Add someone</label>
       <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>`}`;
 
+  if (!isHost) return html;
   const allDone = C.allPaid || (others.every((r) => r.settled || !r.total) && Math.abs(C.pool) <= SLACK);
   html += `<h2 class="group">Tab</h2><div class="card"><div class="acts" style="margin-top:0">
     <button type="button" class="btn sm ghost" data-act="share">Share the link</button>
@@ -509,17 +510,22 @@ function hostPanel(C) {
 }
 
 function personCard(r) {
-  const p = r.p, isMe = p.id === HOST, [cls, status] = statusOf(r);
+  const p = r.p, isMe = p.id === me, [cls, status] = statusOf(r);
   const items = r.lines.length
     ? `<ul class="mini-items">${r.lines.map((l) => `<li><span>${esc(l.label)}</span><span class="money">${fmt(l.amt)}</span></li>`).join('')}
        <li class="muted"><span>Tax, fees and tip</span><span class="money">${fmt(r.extrasR)}</span></li></ul>`
     : '<p class="note" style="margin:6px 0 0">No items yet.</p>';
   let acts = '';
   let more = '';
-  if (!T.closed) {
+  if (!T.closed && !isHost) {
+    if (p.id === me) {
+      acts += `<button type="button" class="btn sm ghost" data-act="editdone">Edit my items</button>`;
+      if (r.owed > SLACK && !r.settled) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
+    }
+  } else if (!T.closed) {
     acts += `<button type="button" class="btn sm ghost" data-act="editfor" data-p="${p.id}">Edit items</button>`;
-    if (!isMe && !r.settled && r.owed > SLACK) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind privately</button>`;
-    if (!isMe) {
+    if (p.id !== HOST && !r.settled && r.owed > SLACK) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind privately</button>`;
+    if (p.id !== HOST) {
       if (!r.settled && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;
       if (p.paid != null && !p.ok) more += `<button type="button" class="btn sm ghost" data-act="confirm" data-p="${p.id}">Got it</button>`;
       if (p.paid != null && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="waive" data-p="${p.id}">Let the ${fmt(r.owed)} go</button>`;
@@ -528,7 +534,7 @@ function personCard(r) {
     }
   }
   return `<div class="card person-card${cls === 'due' && r.total ? ' due' : ''}${cls === 'done' ? ' done' : ''}">
-    <div class="pc-head">${av(p)}<span class="p-name"><b>${isMe ? 'You' : esc(p.name)}</b><small class="${cls}">${esc(status)}</small></span><b class="money pc-total">${fmt(r.total)}</b></div>
+    <div class="pc-head">${av(p)}<span class="p-name"><b>${isMe ? 'You' : esc(p.name)}${p.id === HOST && !isMe ? ' <span class="muted">(paid)</span>' : ''}</b><small class="${cls}">${esc(status)}</small></span><b class="money pc-total">${fmt(r.total)}</b></div>
     ${items}
     ${r.locked ? '<p class="note">Locked when they paid, so later changes won’t move it.</p>' : ''}
     ${acts ? `<div class="acts">${acts}${more ? `<details class="more-acts" data-p="${p.id}" ${openPeople.has(p.id) ? 'open' : ''}><summary class="btn sm ghost">More</summary><div class="acts">${more}</div></details>` : ''}</div>` : ''}
@@ -668,7 +674,7 @@ function setMe(id, fromLink) {
   me = id;
   store.set('tab-me:' + tabId, id);
   if (id) beacon({ op: 'pick', p: id });
-  view = isHost ? view : 'items';
+  if (!isHost) view = 'items';
   if (!fromLink) { renderAll(); window.scrollTo(0, 0); }
 }
 async function shareText(text, msg) {
@@ -709,7 +715,8 @@ app.addEventListener('click', (e) => {
   if (a === 'dec' && it) setUnits(it.id, who(), units(it.id, who()) - 1);
   if (a === 'toggle' && it) setUnits(it.id, who(), units(it.id, who()) > 0 ? 0 : 1);
   if (a === 'editfor') { editFor = b.dataset.p === me ? null : b.dataset.p; view = 'items'; renderAll(); window.scrollTo(0, 0); return; }
-  if (a === 'editdone') { editFor = null; view = 'people'; renderAll(); window.scrollTo(0, 0); return; }
+  if (a === 'editdone') { const back = !!editFor; editFor = null; view = back ? 'people' : 'items'; renderAll(); window.scrollTo(0, 0); return; }
+  if (a === 'mine') { openSheet({ type: 'mine' }); return; }
   if (a === 'assign' && it) openSheet({ type: 'assign', i: it.id });
   if (a === 'pool') act({ op: 'setup', pool: b.dataset.v === 'none' ? null : b.dataset.v }, b.dataset.v === 'spread' ? 'Split across everyone who hasn’t paid' : b.dataset.v === 'cover' ? 'You’re covering it' : 'Undone');
   if (a === 'remind') remind(b.dataset.p);

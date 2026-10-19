@@ -168,6 +168,19 @@ await step('Review and pay opens Venmo with the exact amount, and coming back ma
   assert.ok(raw().log.some((e) => e.type === 'pay_tapped' && e.person === pid('Anna')));
 });
 
+await step('friends can open People and see everyone’s breakdown, without host buttons', async () => {
+  await anna.click('[data-act="view"][data-v="people"]');
+  const t = anna.text('#app');
+  assert.match(t, /Ben/);
+  assert.match(t, /Large Hot Honey/);
+  assert.match(t, /Paid the bill/);
+  assert.equal(anna.$('[data-act="remind"]'), null);
+  assert.equal(anna.$('[data-act="remove"]'), null);
+  assert.equal(anna.$('[data-act="pool"]'), null);
+  assert.equal(anna.$('#addPerson'), null);
+  await anna.click('[data-act="view"][data-v="items"]');
+});
+
 // ---------- Ben opens his personal reminder link ----------
 const ben = await phone(`/t/${tabId}?p=${pid('Ben')}`);
 let benTotal;
