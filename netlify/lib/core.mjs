@@ -395,7 +395,7 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
 });
 const NOT_FOUND = 'This tab doesn’t exist. Check the link.';
 
-export async function handle(req, store, now = () => Date.now()) {
+export async function handle(req, store, now = () => Date.now(), previewStore = null) {
   try {
     if (req.method === 'GET') {
       const q = new URL(req.url).searchParams;
@@ -419,6 +419,20 @@ export async function handle(req, store, now = () => Date.now()) {
           T.id = newTabId();
         }
         throw new HttpError(500, 'Couldn’t create the tab. Try again.');
+      }
+      if (body.op === 'import') {
+        // One-time move of a tab made on a deploy preview to the live site. Host key required.
+        if (!previewStore) throw new HttpError(404, NOT_FOUND);
+        if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);
+        const here = await read(store, body.t);
+        if (here) throw new HttpError(409, 'This tab is already on the live site.');
+        const there = await read(previewStore, body.t);
+        if (!there || typeof body.key !== 'string' || hash(body.key) !== there.data.hostKeyHash) throw new HttpError(404, NOT_FOUND);
+        const T = there.data;
+        log(T, now(), 'imported', { from: 'deploy-preview' });
+        const w = await store.setJSON(keyFor(T.id), T, { onlyIfNew: true });
+        if (!w || !w.modified) throw new HttpError(409, 'This tab is already on the live site.');
+        return json({ state: forPhones(T) });
       }
       if (body.op === 'checkhost') {
         if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);

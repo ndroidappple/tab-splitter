@@ -2,6 +2,7 @@
 import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName, slotsOf } from './split.mjs';
 
 const API = '/api/tab';
+const LIVE = 'https://tabsplitterns.netlify.app';
 const PALETTE = ['#2F5BD3', '#0E8A5C', '#C2410C', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#A16207', '#4338CA', '#0F766E', '#9D174D', '#475569'];
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
@@ -263,6 +264,7 @@ let editFor = null; // the host is editing this person's items
 const pend = new Map(); // even split: "item|person" -> 1 (in) or 0 (out), not yet saved
 let pendOps = []; // itemized: slot changes not yet saved, in order
 const openPeople = new Set();
+const openCards = new Set(); // person cards the viewer has expanded
 let sheet = null;
 let lastActivity = Date.now();
 let payReturn = null; // { amt } while someone is off in Venmo
@@ -351,7 +353,13 @@ async function poll(full) {
   try {
     const r = await fetch(`${API}?t=${tabId}` + (T && !full ? `&rev=${T.rev}` : ''), { cache: 'no-store' });
     const d = await r.json().catch(() => ({}));
-    if (r.status === 404) { renderMissing(d.error); return; }
+    if (r.status === 404) {
+      if (hostKey && !T) {
+        // A tab started on a preview: bring it over once, using the host key.
+        try { const m = await post({ op: 'import', t: tabId, key: hostKey }); isHost = true; me = HOST; store.set('tab-me:' + tabId, HOST); view = 'people'; accept(m.state); toast('Your tab is on the live site now. Share the new link.'); return; } catch (e) { /* not importable */ }
+      }
+      renderMissing(d.error); return;
+    }
     if (!r.ok) throw new Error(String(r.status));
     online(true);
     if (!d.same) accept(d);
@@ -528,7 +536,7 @@ function peoplePanel(C) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
         const what = T.mode !== 'even' && it.qty > 1 ? `${inf.left} × ${it.name}` : it.name;
-        return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Assign</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
+        return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Who had it?</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
       }).join('')}</ul>`;
     }
     if (!T.closed && isHost) {
@@ -550,6 +558,7 @@ function peoplePanel(C) {
   html += `<h2 class="group">Tab</h2><div class="card"><div class="acts" style="margin-top:0">
     <button type="button" class="btn sm ghost" data-act="share">Share the link</button>
     <button type="button" class="btn sm ghost" data-act="report">See the report</button>
+    ${/^deploy-preview-/.test(location.hostname) ? `<a class="btn sm" href="${LIVE}/t/${tabId}#h=${encodeURIComponent(hostKey)}">Open on the live site</a>` : ''}
     ${T.closed ? '<button type="button" class="btn sm ghost" data-act="reopen">Reopen</button>'
     : `<button type="button" class="btn sm${allDone ? '' : ' ghost'}" data-act="close" ${allDone ? '' : 'aria-describedby="closeNote"'}>Close the tab</button>`}</div>
     ${!T.closed && !allDone ? '<p class="note" id="closeNote">You can close it once everyone has paid and nothing is left uncovered.</p>' : ''}</div>`;
@@ -580,10 +589,13 @@ function personCard(r) {
       more += `<button type="button" class="btn sm ghost" data-act="remove" data-p="${p.id}">Remove</button>`;
     }
   }
+  const n = r.lines.length;
   return `<div class="card person-card${cls === 'due' && r.total ? ' due' : ''}${cls === 'done' ? ' done' : ''}">
-    <div class="pc-head">${av(p)}<span class="p-name"><b>${isMe ? 'You' : esc(p.name)}${p.id === HOST && !isMe ? ' <span class="muted">(paid)</span>' : ''}</b><small class="${cls}">${esc(status)}</small></span><b class="money pc-total">${fmt(r.total)}</b></div>
+    <details class="pc" data-p="${p.id}" ${openCards.has(p.id) ? 'open' : ''}>
+    <summary class="pc-head">${av(p)}<span class="p-name"><b>${isMe ? 'You' : esc(p.name)}${p.id === HOST && !isMe ? ' <span class="muted">(paid)</span>' : ''}</b><small class="${cls}">${esc(status)}${n ? ` · ${n} item${n === 1 ? '' : 's'}` : ''}</small></span><b class="money pc-total">${fmt(r.total)}</b><span class="chev" aria-hidden="true"></span></summary>
     ${items}
     ${r.locked ? '<p class="note">Locked when they paid, so later changes won’t move it.</p>' : ''}
+    </details>
     ${acts ? `<div class="acts">${acts}${more ? `<details class="more-acts" data-p="${p.id}" ${openPeople.has(p.id) ? 'open' : ''}><summary class="btn sm ghost">More</summary><div class="acts">${more}</div></details>` : ''}</div>` : ''}
   </div>`;
 }
@@ -647,24 +659,40 @@ function renderSheet(C) {
       return `<div class="prow">${av(p)}<span class="grow">${label}</span>
         <button type="button" class="tick" data-act="s-toggle" data-p="${pid}" aria-pressed="${isIn(pid)}" aria-label="${label} had ${even || it.qty < 2 ? esc(it.name) : `number ${k + 1}`}">${CHECK}</button></div>`;
     }).join('');
-    let top = '', sub;
-    if (even) sub = 'Everyone ticked splits it evenly.';
-    else if (it.qty < 2) sub = 'Tick everyone who had it. It’s split evenly between them.';
-    else {
-      sub = `${it.qty} on the receipt at ${fmt(it.cents / it.qty)} each. Pick one, then tick who had it. Tick two or more if they shared it.`;
-      top = `<div class="slots sheet-slots" role="group" aria-label="Pick one">${inf.slots.map((ps, j) => {
-        const { face, style } = slotFace(ps);
-        return `<button type="button" class="slot ${ps.length ? 'taken' : 'open'}${j === k ? ' picked' : ''}" ${style ? `style="${style}"` : ''} data-act="s-pick" data-k="${j}" aria-pressed="${j === k}" aria-label="Number ${j + 1}: ${ps.length ? esc(ps.map(shortName).join(' and ')) : 'open'}">${face}</button>`;
-      }).join('')}</div>`;
+    const title = `<h2 id="sheetTitle">${esc(it.name)} <span class="muted money">${fmt(it.cents)}</span></h2>`;
+    if (even || it.qty < 2) {
+      const sub = even ? 'Everyone ticked splits it evenly.' : 'Tick everyone who had it. It’s split evenly between them.';
+      setHTML(b, `<div class="sh">${title}<p class="sub">${sub}</p>${rows}<div class="sh-foot">${done()}</div></div>`);
+      return;
     }
-    if (s.ask && slot && slot.length && !slot.includes(t)) {
-      top += `<div class="banner"><p style="margin:0 0 8px">This one is ${esc(slot.map(shortName).join(' and '))}’s. Did ${t === me ? 'you' : esc(nameOf(t))} share it?</p>
+    // Several on the receipt: how many each person had, then (optionally) who shared a single one.
+    const open = inf.slots.filter((x) => !x.length).length;
+    const counts = order.map((pid) => {
+      const p = T.people[pid], label = pid === me ? 'You' : esc(p.name);
+      const n = inf.slots.filter((x) => x.includes(pid)).length;
+      const shared = inf.slots.filter((x) => x.length > 1 && x.includes(pid)).length;
+      return `<div class="prow">${av(p)}<span class="grow">${label}${shared ? ` <span class="muted">(${shared} shared)</span>` : ''}</span>
+        <span class="stepper"><button type="button" data-act="s-dec" data-p="${pid}" aria-label="One fewer for ${label}" ${n ? '' : 'disabled'}>−</button><output aria-label="${label} has">${n}</output><button type="button" data-act="s-inc" data-p="${pid}" aria-label="One more for ${label}" ${open ? '' : 'disabled'}>+</button></span></div>`;
+    }).join('');
+    const strip = `<div class="slots sheet-slots" role="group" aria-label="Each one on the receipt">${inf.slots.map((ps, j) => {
+      const { face, style } = slotFace(ps);
+      return `<button type="button" class="slot ${ps.length ? 'taken' : 'open'}${s.share && j === k ? ' picked' : ''}" ${style ? `style="${style}"` : ''} data-act="s-pick" data-k="${j}" aria-pressed="${!!s.share && j === k}" aria-label="Number ${j + 1}: ${ps.length ? esc(ps.map(shortName).join(' and ')) : 'open'}. Tap to choose who shared it">${face}</button>`;
+    }).join('')}</div>`;
+    let share = '';
+    if (s.ask && slot.length && !slot.includes(t)) {
+      share += `<div class="banner"><p style="margin:0 0 8px">Number ${k + 1} is ${esc(slot.map(shortName).join(' and '))}’s. Did ${t === me ? 'you' : esc(nameOf(t))} share it?</p>
         <button type="button" class="btn sm" data-act="s-yes">Yes, ${t === me ? 'I' : esc(nameOf(t))} shared it</button></div>`;
     }
-    const all = !even && it.qty > 1 && slot.length
-      ? `<button type="button" class="btn ghost wide" data-act="s-all">Same people for all ${it.qty}</button>` : '';
-    setHTML(b, `<div class="sh"><h2 id="sheetTitle">${esc(it.name)}${!even && it.qty > 1 ? ` <span class="muted">· ${k + 1} of ${it.qty}</span>` : ''} <span class="muted money">${fmt(it.cents)}</span></h2>
-      <p class="sub">${sub}</p>${top}${rows}<div class="sh-foot">${all}${done()}</div></div>`);
+    if (s.share) {
+      share += `<h3 class="sheet-h">Who shared number ${k + 1}?</h3>${rows}
+        ${slot.length ? `<button type="button" class="btn ghost wide" data-act="s-all" style="margin-top:10px">Same people for all ${it.qty}</button>` : ''}`;
+    }
+    setHTML(b, `<div class="sh">${title}
+      <p class="sub">${it.qty} on the receipt at ${fmt(it.cents / it.qty)} each. ${open ? `${open} still open.` : 'All accounted for.'}</p>
+      ${strip}
+      <h3 class="sheet-h">How many each person had</h3>${counts}
+      ${share || '<p class="note">If two people shared one, tap it above to pick who.</p>'}
+      <div class="sh-foot">${done()}</div></div>`);
   } else if (s.type === 'mine') {
     const r = C.byId[me];
     let pay = '';
@@ -693,11 +721,6 @@ function renderSheet(C) {
       <form id="amountForm"><label class="sr" for="amount">Amount in dollars</label>
       <input id="amount" class="in money" inputmode="decimal" value="${dollars(Math.max(0, r.owed))}" autocomplete="off">
       <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${done('Cancel')}</div></form></div>`;
-  } else if (s.type === 'assign') {
-    const it = T.items.find((x) => x.id === s.i); if (!it) { closeSheet(); return; }
-    setHTML(b, `<div class="sh"><h2 id="sheetTitle">Who had ${esc(it.name)}?</h2><p class="sub">They’ll see it on their total, marked as added by you.</p>
-      ${people().map((p) => `<div class="prow">${av(p)}<span class="grow">${p.id === me ? 'You' : esc(p.name)}</span><button type="button" class="btn sm ghost" data-act="give" data-p="${p.id}">Give it to them</button></div>`).join('')}
-      <div class="sh-foot">${done()}</div></div>`);
   } else if (s.type === 'created') {
     setHTML(b, `<div class="sh"><h2 id="sheetTitle">Your tab is ready</h2>
       <p class="sub">Send the link to the group chat. Everyone taps their name, picks what they had and pays you.</p>
@@ -776,14 +799,14 @@ app.addEventListener('click', (e) => {
     const k = Number(b.dataset.k), t = who(), sl = slotsNow(it)[k] || [];
     if (!sl.length) slotOp({ a: 'take', i: it.id, p: t });
     else if (sl.includes(t)) slotOp({ a: 'leave', i: it.id, k, p: t });
-    else openSheet({ type: 'item', i: it.id, k, ask: true });
+    else openSheet({ type: 'item', i: it.id, k, ask: true, share: true });
     return;
   }
   if (a === 'toggle' && it) toggleItem(it, who());
   if (a === 'editfor') { editFor = b.dataset.p === me ? null : b.dataset.p; view = 'items'; renderAll(); window.scrollTo(0, 0); return; }
   if (a === 'editdone') { const back = !!editFor; editFor = null; view = back ? 'people' : 'items'; renderAll(); window.scrollTo(0, 0); return; }
   if (a === 'mine') { openSheet({ type: 'mine' }); return; }
-  if (a === 'assign' && it) openSheet({ type: 'assign', i: it.id });
+  if (a === 'assign' && it) { view = 'items'; editFor = null; renderAll(); openSheet({ type: 'item', i: it.id }); return; }
   if (a === 'pool') act({ op: 'setup', pool: b.dataset.v === 'none' ? null : b.dataset.v }, b.dataset.v === 'spread' ? 'Split across everyone who hasn’t paid' : b.dataset.v === 'cover' ? 'You’re covering it' : 'Undone');
   if (a === 'remind') remind(b.dataset.p);
   if (a === 'markpaid') openSheet({ type: 'markpaid', p: b.dataset.p });
@@ -799,6 +822,7 @@ app.addEventListener('click', (e) => {
 app.addEventListener('toggle', (e) => {
   const d = e.target;
   if (d.classList && d.classList.contains('more-acts')) { if (d.open) openPeople.add(d.dataset.p); else openPeople.delete(d.dataset.p); }
+  if (d.classList && d.classList.contains('pc')) { if (d.open) openCards.add(d.dataset.p); else openCards.delete(d.dataset.p); }
 }, true);
 app.addEventListener('submit', async (e) => {
   if (!tabId || !T) return;
@@ -834,21 +858,23 @@ $('#sheetBody').addEventListener('click', (e) => {
   if (a === 'paidyes') { payReturn = null; closeSheet(); act({ op: 'paid', p: me, amount: Number(b.dataset.amt), how: 'venmo' }, 'Marked as paid. Thanks!'); return; }
   if (a === 'unpaid-me') { closeSheet(); act({ op: 'unpaid', p: me }, 'Payment undone'); return; }
   if (a === 'switch') { closeSheet(); me = null; store.set('tab-me:' + tabId, null); renderAll(); return; }
-  if (a === 'give') {
-    const it = T.items.find((x) => x.id === s.i);
-    if (it) {
-      const pid = b.dataset.p;
-      if (T.mode === 'even') setUnits(it.id, pid, 1);
-      else { const open = slotsNow(it).filter((x) => !x.length).length; for (let n = 0; n < Math.max(1, open); n++) slotOp(open ? { a: 'take', i: it.id, p: pid } : { a: 'join', i: it.id, k: 0, p: pid }); }
-      toast(`Given to ${nameOf(pid)}`);
-    }
-    closeSheet(); return;
-  }
   if (s.type === 'item') {
     const it = T.items.find((x) => x.id === s.i); if (!it) return;
     const k = Math.min(s.k || 0, it.qty - 1);
-    if (a === 's-pick') { sheet.k = Number(b.dataset.k); sheet.ask = false; renderSheet(compute_()); return; }
-    if (a === 's-yes') { sheet.ask = false; slotOp({ a: 'join', i: it.id, k, p: who() }); return; }
+    if (a === 's-pick') { sheet.k = Number(b.dataset.k); sheet.ask = false; sheet.share = true; renderSheet(compute_()); return; }
+    if (a === 's-inc') {
+      if (!slotsNow(it).some((x) => !x.length)) { toast(`All ${it.qty} are taken. Lower someone first, or tap one to share it.`); return; }
+      slotOp({ a: 'take', i: it.id, p: b.dataset.p });
+    }
+    if (a === 's-dec') {
+      const pid = b.dataset.p, sl = slotsNow(it);
+      // give back a solo one first, the last one they took
+      let j = -1;
+      sl.forEach((x, n) => { if (x.length === 1 && x[0] === pid) j = n; });
+      if (j < 0) sl.forEach((x, n) => { if (x.includes(pid)) j = n; });
+      if (j >= 0) slotOp({ a: 'leave', i: it.id, k: j, p: pid });
+    }
+    if (a === 's-yes') { sheet.ask = false; sheet.share = true; slotOp({ a: 'join', i: it.id, k, p: who() }); return; }
     if (a === 's-toggle') {
       const pid = b.dataset.p;
       if (T.mode === 'even') setUnits(it.id, pid, units(it.id, pid) > 0 ? 0 : 1);
@@ -883,8 +909,9 @@ window.addEventListener('popstate', () => location.reload());
 async function start() {
   if (!tabId) { renderStart(); return; }
   if (hostKey) {
-    try { const d = await post({ op: 'checkhost', t: tabId, key: hostKey }); isHost = !!d.isHost; } catch (e) { isHost = false; }
-    if (isHost) { me = HOST; store.set('tab-me:' + tabId, HOST); } else { hostKey = null; }
+    let missing = false;
+    try { const d = await post({ op: 'checkhost', t: tabId, key: hostKey }); isHost = !!d.isHost; } catch (e) { isHost = false; missing = e.status === 404; }
+    if (isHost) { me = HOST; store.set('tab-me:' + tabId, HOST); } else if (!missing) { hostKey = null; }
   }
   if (isHost) view = 'people';
   await poll(true);

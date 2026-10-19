@@ -154,7 +154,11 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .person-card{margin-bottom:0}
 .person-card.due{box-shadow:inset 4px 0 0 var(--warn)}
 .person-card.done{box-shadow:inset 4px 0 0 var(--ok)}
-.pc-head{display:flex;align-items:center;gap:10px}
+.pc-head{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;min-height:44px;border-radius:10px}
+.pc-head::-webkit-details-marker{display:none}
+.chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.6;transition:transform .15s}
+.pc[open] .chev{transform:rotate(225deg);margin-bottom:-4px}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
 .pc-total{font-size:18px}
 .mini-items{list-style:none;padding:0;margin:10px 0 0 38px;font-size:14.5px}
 .mini-items li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
@@ -173,6 +177,7 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .slot.shared{font-size:12.5px;letter-spacing:-.02em}
 .slot.picked{outline:3px solid var(--ink);outline-offset:2px}
 .sheet-slots{padding:0 0 12px}
+.sheet-h{font-size:15px;margin:14px 0 4px}
 .slot-extra{color:var(--warn);font-weight:700;font-size:13.5px}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
 .toast.show{opacity:1}

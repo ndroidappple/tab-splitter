@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import { handle, keyFor, HOST } from '../netlify/lib/core.mjs';
 import { compute } from '../public/split.mjs';
 import { fakeStore } from './fake-store.mjs';
@@ -24,7 +24,9 @@ async function serve(url, init = {}) {
 
 // Opens the page at `path` on a fresh "phone" and returns helpers for it.
 async function phone(path) {
-  const dom = new JSDOM(html, { url: 'https://tab.test' + path });
+  const vc = new VirtualConsole();
+  vc.on('jsdomError', (e) => console.log('PAGE ERROR:', e.stack.split('\n').slice(0, 3).join(' | ')));
+  const dom = new JSDOM(html, { url: 'https://tab.test' + path, virtualConsole: vc });
   const w = dom.window;
   const D = w.HTMLDialogElement.prototype;
   D.showModal = function () { this.setAttribute('open', ''); };
@@ -108,12 +110,32 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
   await nick.click(`[data-act="toggle"][data-i="${iid('New Glarus Tailwagger DRFT')}"]`);
   assert.match(nick.text('#dockIn'), /Ben’s total/);
   await nick.click('#dockIn [data-act="editdone"]');
+  const benCard = nick.$(`details.pc[data-p="${pid('Ben')}"]`);
+  assert.ok(benCard && !benCard.open, 'person cards start collapsed');
+  assert.match(benCard.querySelector('summary').textContent, /2 items/);
+  benCard.open = true; benCard.dispatchEvent(new nick.w.Event('toggle'));
   assert.match(nick.text('#app'), /Large Hot Honey/); // shown on Ben's card in People
   await nick.settle();
   const T = raw();
   assert.deepEqual(T.slots[iid('Large Hot Honey')], [[pid('Ben')]]);
   assert.equal(T.by[iid('Large Hot Honey')][pid('Ben')], HOST);
   assert.deepEqual(T.slots[iid('Bloody Mary')], [[HOST]]);
+});
+
+await step('a drink several people had: + once per person in the item sheet', async () => {
+  await nick.click('[data-act="view"][data-v="items"]');
+  const cider = iid('Von Stiehl Cherry Cider DRFT');
+  await nick.click(`[data-act="item"][data-i="${cider}"]`);
+  // Nick already has one; give the other to Ben, then take it back off
+  await nick.click(`#sheetBody [data-act="s-inc"][data-p="${pid('Ben')}"]`);
+  await nick.settle();
+  assert.deepEqual(raw().slots[cider], [[HOST], [pid('Ben')]]);
+  assert.ok(nick.$(`#sheetBody [data-act="s-inc"][data-p="${pid('Anna')}"]`).disabled, 'no open ones left');
+  await nick.click(`#sheetBody [data-act="s-dec"][data-p="${pid('Ben')}"]`);
+  await nick.settle();
+  assert.deepEqual(raw().slots[cider], [[HOST], []]);
+  await nick.click('#sheetBody [data-act="close-sheet"]');
+  await nick.click('[data-act="view"][data-v="people"]');
 });
 
 // ---------- Anna opens the group link ----------
@@ -147,6 +169,8 @@ await step('Anna claims her pizza and cider, and shares the curds with Nick', as
   assert.deepEqual(owners, [HOST, pid('Anna')], 'one slot each, nothing open');
   // Both curds were shared with Nick: tick both of them on the first, then "same for all"
   await anna.click(`[data-act="item"][data-i="${iid('Fried Cheese Curds')}"]`);
+  assert.match(anna.text('#sheetBody'), /How many each person had/);
+  await anna.click('#sheetBody [data-act="s-pick"][data-k="0"]');
   await anna.click(`#sheetBody [data-act="s-toggle"][data-p="${pid('Anna')}"]`);
   await anna.click(`#sheetBody [data-act="s-toggle"][data-p="${HOST}"]`);
   await anna.click('#sheetBody [data-act="s-all"]');
@@ -218,8 +242,11 @@ await step('the host link restores the host view', async () => {
 });
 await step('Nick gives the Diet Coke to Ben and lets Ben’s remainder go', async () => {
   await nick2.click(`[data-act="assign"][data-i="${iid('Diet Coke')}"]`);
-  await nick2.click(`#sheetBody [data-act="give"][data-p="${pid('Ben')}"]`);
+  assert.match(nick2.text('#app'), /Needs someone/, 'Who had it? opens the items tab');
+  await nick2.click(`#sheetBody [data-act="s-toggle"][data-p="${pid('Ben')}"]`);
+  await nick2.click('#sheetBody [data-act="close-sheet"]');
   await nick2.settle();
+  await nick2.click('[data-act="view"][data-v="people"]');
   assert.deepEqual(raw().slots[iid('Diet Coke')], [[pid('Ben')]]);
   await nick2.click(`[data-act="waive"][data-p="${pid('Ben')}"]`);
   const C = compute(raw());

@@ -244,6 +244,24 @@ await test('tabs saved with the old per-person counts turn into slots', async ()
   assert.equal(after.byId.a.total, before.byId.a.total);
 });
 
+await test('a preview tab can be brought to the live site once, only with its host key', async () => {
+  const preview = fakeStore(), live = fakeStore();
+  const c = await post({ op: 'create', hostName: 'Nick', items: WILD, charge: 18009, people: ['Anna'] }, preview);
+  const imp = async (key) => {
+    const res = await handle(new Request('https://x/api/tab', { method: 'POST', body: JSON.stringify({ op: 'import', t: c.id, key }) }), live, now, preview);
+    return { status: res.status, ...(await res.json()) };
+  };
+  assert.equal((await imp('wrong')).status, 404);
+  const ok = await imp(c.hostKey);
+  assert.equal(ok.status, 200);
+  assert.equal(Object.keys(ok.state.people).length, 2);
+  assert.equal(live.raw(keyFor(c.id)).hostKeyHash, preview.raw(keyFor(c.id)).hostKeyHash);
+  assert.equal((await imp(c.hostKey)).status, 409);
+  // and previews themselves can't import
+  const res = await handle(new Request('https://x/api/tab', { method: 'POST', body: JSON.stringify({ op: 'import', t: c.id, key: c.hostKey }) }), live, now, null);
+  assert.equal(res.status, 404);
+});
+
 await test('apportion always adds up', async () => {
   assert.deepEqual(apportion(100, [1, 1, 1]), [34, 33, 33]);
   assert.deepEqual(apportion(5, [0, 0]), [3, 2]);

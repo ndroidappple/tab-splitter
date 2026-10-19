@@ -7,3 +7,9 @@ export function tabStore(context) {
   const name = !where || where === 'production' ? 'tab-split' : `tab-split-${where}`;
   return getStore({ name, consistency: 'strong' });
 }
+
+// On the live site only: where deploy previews kept their tabs, so a host can bring one over.
+export function previewStoreFor(context) {
+  const where = context && context.deploy && context.deploy.context;
+  return where === 'production' ? getStore({ name: 'tab-split-deploy-preview', consistency: 'strong' }) : null;
+}
