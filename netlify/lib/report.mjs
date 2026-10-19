@@ -14,6 +14,7 @@ export const TARGETS = {
   left_on_payer: '$0',
   payments_within_1: '95% or more',
   totals_moved_after_paying: '0',
+  claim_fixes_after_all_claimed: '2 or fewer',
   unconfirmed_venmo_taps: 'under 10%',
   adds_up_to_cent: 'true on every tab',
 };
@@ -70,6 +71,7 @@ export function buildReport(d) {
   const taps = log.filter((e) => e.type === 'pay_tapped' && e.person);
   const unconfirmed = taps.filter((tap) => !log.some((e) => e.type === 'paid' && e.person === tap.person && e.t >= tap.t && e.t - tap.t <= 10 * MIN));
   const payers = others.filter((r) => r.p.paid != null);
+  const allClaimedAt = first(log, (e) => e.type === 'all_claimed');
 
   const metrics = {
     minutes_to_settled: milestones.all_paid.minutes_from_start,
@@ -78,6 +80,7 @@ export function buildReport(d) {
     left_on_payer: dollars(Math.max(0, C.unassigned)),
     payments_within_1: payers.length ? Math.round((payers.filter((r) => Math.abs(r.owed) <= SLACK).length / payers.length) * 100) / 100 : null,
     totals_moved_after_paying: log.filter((e) => e.type === 'total_moved').length,
+    claim_fixes_after_all_claimed: allClaimedAt == null ? null : log.filter((e) => e.type === 'claim' && e.t > allClaimedAt).length,
     unconfirmed_venmo_taps: taps.length ? Math.round((unconfirmed.length / taps.length) * 100) / 100 : null,
     adds_up_to_cent: C.openItems.length ? null : C.assigned === TOTAL,
   };

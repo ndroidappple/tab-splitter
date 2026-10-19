@@ -122,6 +122,7 @@ await test('report: milestones and metrics', async () => {
   assert.equal(r.metrics.reminders, 1);
   assert.equal(r.metrics.unconfirmed_venmo_taps, 0.5); // Ben's tap had no "paid" within 10 minutes
   assert.ok(r.metrics.totals_moved_after_paying >= 1);
+  assert.equal(r.metrics.claim_fixes_after_all_claimed, 2); // Ben took the Bloody Mary from Anna: two claim lines
   const a = r.people.find((p) => p.name === 'Anna');
   assert.equal(a.minutes_open_to_paid, 2 + 1 + 1 + 1 + 3 + 1 - 2); // opened at minute 2, paid at minute 9
   assert.equal(r.people.find((p) => p.name === 'Ben').claimed_by_someone_else, false);
