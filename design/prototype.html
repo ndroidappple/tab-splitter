@@ -4,9 +4,6 @@
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>Tab Splitter Prototype</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 :root{
   /* Layout: one thermal-receipt strip on a slate ground, a tear-off total stub docked under it; sheets are paper too. */
@@ -344,6 +341,46 @@ html[data-nav="morph"]::view-transition-new(root){animation:vt-in var(--enter-ms
 @keyframes roll-out{to{transform:translateY(calc(var(--dir) * -.5em));opacity:0;filter:blur(2px)}}
 @keyframes stamp-in{0%{transform:scale(2.3) rotate(-18deg);opacity:0}40%{opacity:1}100%{transform:scale(1) rotate(-8deg)}}
 @keyframes scan{to{top:calc(100% - 2px)}}
+/* ---------- Tab's current look (decided: keep today's cards, take only the motion) ---------- */
+:root{--ground:#E9ECF1;--paper:#FFFFFF;--field:#EEF0F4;--ink:#1B1D24;--muted:#5D6373;--rule:#D6DAE2;--warn:#B3261E;--warn-soft:#FBE7E5;--ok:#17703F;--ok-soft:#E1F2E8;--btn:#1B1D24;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ground:#15171C;--paper:#1F2229;--field:#282C34;--ink:#F1F2F5;--muted:#A2A8B6;--rule:#343844;--warn:#F2867C;--warn-soft:#3B1F1D;--ok:#5ACB8E;--ok-soft:#18322A;--btn:#F1F2F5;--btn-ink:#15171C}}
+:root[data-theme="dark"]{--ground:#15171C;--paper:#1F2229;--field:#282C34;--ink:#F1F2F5;--muted:#A2A8B6;--rule:#343844;--warn:#F2867C;--warn-soft:#3B1F1D;--ok:#5ACB8E;--ok-soft:#18322A;--btn:#F1F2F5;--btn-ink:#15171C}
+h1{font-size:28px;letter-spacing:-.02em}
+.brand span{font-family:var(--ui)}
+.eyebrow{font-family:var(--ui);font-size:13.5px;font-weight:400;letter-spacing:0;text-transform:none}
+.lead,.r-head,.r-foot,.pic,.stub::before,.receipt::before,.receipt::after{display:none}
+.receipt{background:none;margin:12px 0 0;padding:0}
+.sect{font-family:var(--ui);font-size:15px;font-weight:400;letter-spacing:.04em;padding:20px 4px 8px}
+.sect::after{display:none}
+.count{font-family:var(--ui);font-weight:800}
+.line{background:var(--paper);border:1px solid var(--rule);border-top-width:0;min-height:60px}
+.sect + .line{border-top-width:1px;border-radius:16px 16px 0 0}
+.line:has(+ .sect),.line:has(+ .r-foot){border-radius:0 0 16px 16px}
+.sect + .line:has(+ .sect),.sect + .line:has(+ .r-foot){border-radius:16px}
+.l-top{justify-content:space-between;gap:12px}
+.l-name{font-weight:650;font-size:16px}
+.price,.qty{font-family:var(--ui)}
+.hl{background:none;padding:0;margin:0}
+.line.mine{background:color-mix(in srgb,var(--me) 9%,var(--paper));box-shadow:inset 4px 0 0 var(--me)}
+.once-draw{animation:mine-in var(--slide-ms) var(--slide) both}
+.once-erase{animation:mine-out var(--exit-ms) var(--exit) both}
+@keyframes mine-in{from{background-color:var(--paper);box-shadow:inset 0 0 0 var(--me)}}
+@keyframes mine-out{from{background-color:color-mix(in srgb,var(--me) 9%,var(--paper));box-shadow:inset 4px 0 0 var(--me)}}
+.slot.mine{box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--pc)}
+.yours{font-family:var(--ui)}
+.card,.name-btn,.chip-btn{border:1px solid var(--rule);box-shadow:none}
+.big,.pc-total,.dock-sum strong{font-family:var(--ui);font-weight:800;letter-spacing:-.01em}
+.mini,.lines,.read{font-family:var(--ui)}
+.mini li,.lines li,.read li,.lr{justify-content:space-between;gap:12px}
+.lines li{border-bottom:1px dotted var(--rule)}
+.lines li.tot{border-bottom:0;font-weight:800}
+.stamp,.stamp.sm{font-family:var(--ui);font-size:13px;font-weight:700;letter-spacing:0;text-transform:none;border:0;border-radius:999px;padding:2px 9px;background:var(--ok-soft);transform:none}
+.stamp.once-stamp{animation:pop var(--pop-ms) var(--pop) both}
+.dock{filter:none}
+.stub{border-top:1px solid var(--rule)}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--rule);border-top-color:var(--me);animation:sp calc(1s * var(--slow)) linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
 /* Motion off (the prototype's switch) or Reduce Motion: everything lands at once, like Tab today. */
 html[data-still] *,html[data-still] *::before,html[data-still] *::after{animation:none!important;transition:none!important}
 </style>
@@ -671,7 +708,7 @@ function pic(big) {
 function renderStart() {
   app.dataset.screen = 'start';
   if (S.step === 'scan') {
-    app.innerHTML = `<h1>Reading the receipt</h1><p class="lede" role="status">Checking each line against the subtotal.</p>${pic(true)}<ul class="read" id="readList"></ul>`;
+    app.innerHTML = `<h1>Reading the receipt</h1><p class="lede" role="status"><span class="spin"></span>Checking each line against the subtotal.</p><ul class="read" id="readList"></ul>`;
     return;
   }
   app.innerHTML = `<h1>Split a tab</h1>
@@ -815,7 +852,7 @@ function renderBanner() {
   setHTML(b, T.closed ? '<p class="banner ok">This tab is closed. Thanks, everyone.</p>' : '');
 }
 
-/* Items: the receipt. Rows you tick stay where they are; once you pause, they glide to their group. */
+/* Items. Rows you tick stay where they are until you next come to the list. */
 function renderItems(C, flip) {
   const box = $('#view');
   if (box.dataset.v !== 'items') { box.dataset.v = 'items'; box.innerHTML = '<p class="note" id="itemsNote"></p><div class="receipt" id="receipt"></div>'; }
@@ -897,14 +934,13 @@ function slotsHtml(it, f) {
     return `<button type="button" class="${cls}${ps.length > 1 ? ' shared' : ''}${pop}"${style ? ` style="${style}"` : ''} data-act="slot" data-i="${it.id}" data-k="${k}" aria-label="${label}" ${T.closed ? 'disabled' : ''}>${face}</button>`;
   }).join('')}</div>`;
 }
-/* Regrouping waits for a pause in tapping, so rows never move under your thumb. */
+/* Rows regroup only when you arrive at the list, so nothing ever moves under your thumb. */
 function regroup(flip = true, quiet = false) {
   clearTimeout(regroupT);
   const C = compute();
   T.items.forEach((it) => { grouping[it.id] = claimedNow(it, C) ? 'claimed' : 'needs'; });
   if (!quiet && screen === 'tab' && view === 'items') renderItems(C, flip);
 }
-function regroupSoon(delay = 1400) { clearTimeout(regroupT); regroupT = setTimeout(() => regroup(true), delay * P.slow); }
 function tapped() { lastTap = Date.now(); buzz(); }
 function toggleItem(id) {
   const it = T.items.find((x) => x.id === id); if (!it || T.closed) return;
@@ -912,7 +948,7 @@ function toggleItem(id) {
   const had = it.slots[0].includes(me);
   it.slots[0] = had ? it.slots[0].filter((x) => x !== me) : [...it.slots[0], me];
   touched.set(id, { cls: had ? 'erase' : 'draw', at: performance.now() });
-  update(); regroupSoon();
+  update();
 }
 function changeSlot(it, k, fn) {
   const before = it.slots.filter((s) => s.includes(me)).length;
@@ -926,7 +962,7 @@ function tapSlot(id, k) {
   if (sl.length && !sl.includes(me)) { openSheet({ type: 'item', i: id, k, ask: true }); return; }
   tapped();
   changeSlot(it, k, () => { it.slots[k] = sl.length ? sl.filter((x) => x !== me) : [me]; });
-  update(); regroupSoon();
+  update();
 }
 
 /* People: who owes what. */
@@ -1046,8 +1082,7 @@ function remote(itemId, who, fn) {
   const it = T.items.find((x) => x.id === itemId); if (!it) return;
   fn(it);
   touched.set(itemId, { cls: 'remote', who, at: performance.now() });
-  update();
-  regroupSoon(Date.now() - lastTap > 1400 ? 500 : 1400); // never regroup while someone is tapping
+  update(); // stays in its group until the list is opened again
 }
 function scheduleFriendEvents() {
   const evs = [
@@ -1127,7 +1162,6 @@ function closeSheet() {
 }
 function sheetClosed(s) {
   if (!s) return;
-  if (s.type === 'item') regroupSoon(700);
   if (s.type === 'paycheck') payReturn = null;
 }
 dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
@@ -1515,18 +1549,14 @@ const PATTERNS = [
   { id: 'press', n: '6', t: 'Press feedback on every control', from: 'the press feedback pass', where: 'Any button, row, tick or name.' },
   { id: 'pop', n: '7', t: 'Checks and chips pop in', from: 'the pop spring', where: 'Ticks, the cider and Spotted Cow circles, names added during setup.' },
   { id: 'toast', n: '8', t: 'Undo toasts you can swipe away', from: 'the quieter toast', where: 'Remove a person or a receipt line, mark paid, close the tab. Replaces the browser’s confirm pop-ups.' },
-  { id: 'glide', n: '9', t: 'Rows wait, then glide to their group', from: 'collapse() and FLIP', where: 'Tick a few items, then pause: claimed rows glide down to Claimed.' },
+  { id: 'glide', n: '9', t: 'Rows stay put; removed things fold away', from: 'collapse() and FLIP', where: 'Ticked rows stay in place until you come back to Items. Host view: Remove someone and the cards below glide up.' },
   { id: 'confirm', n: '10', t: 'A sheet to confirm closing the tab', from: 'ConfirmSheet', where: 'Host view, then Close the tab.' },
-  { id: 'live', n: '11', t: 'Other people’s taps arrive quietly', from: 'the no pop-in rule', where: 'Wait on Items as a friend: Haven and Ben claim things. Host view: Ben pays.' },
+  { id: 'live', n: '11', t: 'Other people’s taps arrive quietly', from: 'the no pop-in rule', where: 'Wait on Items as a friend: Haven and Ben claim things, with no toast. Host view: Ben pays.' },
 ];
-const OWN = [
-  { id: 'receipt', n: 'A', t: 'The list is the receipt', where: 'Torn edges, dotted leaders, the server and table line, THANK YOU at the bottom.' },
-  { id: 'highlight', n: 'B', t: 'A highlighter marks what you had', where: 'Tick an item: it gets a swipe in your color.' },
-  { id: 'stamp', n: 'C', t: 'PAID stamp', where: 'Pay on Venmo or another way. Host view when Ben pays.' },
-  { id: 'scan', n: 'D', t: 'Scan line while reading the receipt', where: 'Start a new tab, then Take a photo.' },
-  { id: 'stub', n: 'E', t: 'Tear-off total at the bottom', where: 'The dock on any tab.' },
-];
+const OWN = [];
 const LEFT_OUT = [
+  'The receipt look, highlighter and PAID stamp. Decided: keep today’s cards.',
+  'Toasts when someone else claims an item. Decided: no.',
   'Coaches and characters',
   'GymBuddy’s chunky look: Lexend, thick drop lips, day colors',
   'Help tap-through cards. Friends need to finish in under a minute.',
@@ -1546,8 +1576,7 @@ function notesHtml() {
       <button type="button" class="btn sm ghost" data-act="jump" data-to="host">Host view</button>
       <button type="button" class="btn sm ghost" data-act="jump" data-to="start">Start a new tab</button></div></div>
     <h3 class="sheet-h">Borrowed from GymBuddy</h3><ol class="pats">${PATTERNS.map(pat).join('')}</ol>
-    <h3 class="sheet-h">Tab’s own look</h3><ol class="pats">${OWN.map(pat).join('')}</ol>
-    <h3 class="sheet-h">Left out on purpose</h3><ul class="left">${LEFT_OUT.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <h3 class="sheet-h">Left out on purpose</h3><ul class="left">${LEFT_OUT.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
     <label class="f" for="note-general">Anything else</label>
     <textarea id="note-general" class="fb-note" data-note="general" rows="3" placeholder="What felt off, what you want more of">${esc(FB.notes.general || '')}</textarea>
     <p id="fbStatus" class="note">${fbStatusText()}</p>
