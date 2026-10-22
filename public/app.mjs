@@ -1,5 +1,6 @@
 // The tab page: start a tab (host), claim and pay (friends), and the host's panel.
 import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName, slotsOf } from './split.mjs';
+import { installMotion } from './motion.mjs';
 
 const API = '/api/tab';
 const LIVE = 'https://tabsplitterns.netlify.app';
@@ -907,6 +908,7 @@ window.addEventListener('popstate', () => location.reload());
 
 /* ---------- Start ---------- */
 async function start() {
+  installMotion();
   if (!tabId) { renderStart(); return; }
   if (hostKey) {
     let missing = false;

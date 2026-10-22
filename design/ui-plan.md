@@ -37,7 +37,7 @@ Left out on purpose: coaches, GymBuddy's look (Lexend, thick drop lips, day colo
 
 Four phases, each shipping on its own, behind a Netlify deploy preview.
 
-1. **Motion foundation.** `public/motion.mjs`: springs, `anim()`, `collapse()`/`expand()`, `roll()`, and keyed `patch()` with FLIP. Add press feedback CSS and reduced-motion handling. Users see no change in behaviour.
+1. **Motion foundation** (done). `public/motion.mjs` puts the springs on `:root`; presses on every control; the chevron and toast ride the springs; Reduce Motion zeroes every duration. `anim()`, `collapse()`/`expand()`, `roll()` and keyed `patch()` with FLIP join `motion.mjs` in the phases that first use them.
 2. **Sheets and toasts.** Animated open and close, drag to close, keyboard-aware. Toast with swipe and Undo. Replace both `confirm()` calls.
 3. **Items list.** Render rows by key with `patch()`, so a tap updates one row instead of the whole list. Group rows when the list is opened, not on every render. Add the rolling dock total, tick and slot pops, and the quiet tint for other people's changes.
 4. **Screens.** View transitions for setup, join and People ⇄ Items. Sliding pill. History entries instead of reloading.

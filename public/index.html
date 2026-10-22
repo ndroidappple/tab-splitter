@@ -13,6 +13,10 @@
   --bg:#E9ECF1; --card:#FFFFFF; --ink:#1B1D24; --muted:#5D6373; --line:#D6DAE2; --field:#EEF0F4;
   --warn:#B3261E; --warn-soft:#FBE7E5; --ok:#17703F; --ok-soft:#E1F2E8;
   --btn:#1B1D24; --btn-ink:#FFFFFF; --me:#2F5BD3;
+  /* Springs (motion.mjs sets the real curves); these hold until it runs. */
+  --enter:cubic-bezier(.16,1,.3,1); --enter-ms:375ms; --pop:cubic-bezier(.2,1.5,.4,1); --pop-ms:486ms;
+  --slide:cubic-bezier(.3,1.3,.5,1); --slide-ms:371ms; --surface:cubic-bezier(.2,1,.3,1); --surface-ms:486ms;
+  --exit:cubic-bezier(.4,0,1,1); --exit-ms:200ms;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -156,9 +160,8 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .person-card.done{box-shadow:inset 4px 0 0 var(--ok)}
 .pc-head{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;min-height:44px;border-radius:10px}
 .pc-head::-webkit-details-marker{display:none}
-.chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.6;transition:transform .15s}
+.chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.6;transition:transform var(--slide-ms) var(--slide)}
 .pc[open] .chev{transform:rotate(225deg);margin-bottom:-4px}
-@media (prefers-reduced-motion:reduce){.chev{transition:none}}
 .pc-total{font-size:18px}
 .mini-items{list-style:none;padding:0;margin:10px 0 0 38px;font-size:14.5px}
 .mini-items li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
@@ -179,11 +182,19 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .sheet-slots{padding:0 0 12px}
 .sheet-h{font-size:15px;margin:14px 0 4px}
 .slot-extra{color:var(--warn);font-weight:700;font-size:13.5px}
-.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;transform:translateX(-50%);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transition:opacity .2s}
-.toast.show{opacity:1}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:20;opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;max-width:calc(100% - 32px);width:max-content;text-align:center;transform:translate(-50%,16px);transition:opacity var(--exit-ms) var(--exit),transform var(--exit-ms) var(--exit)}
+.toast.show{opacity:1;transform:translateX(-50%);transition:opacity var(--enter-ms) var(--enter),transform var(--enter-ms) var(--enter)}
 .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--me);animation:sp 1s linear infinite;display:inline-block;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.spin{animation:none}.toast{transition:none}}
+/* Presses: a finger going down lands almost at once; letting go springs back on the pop spring,
+   so a tap reads as a press and a release. Rows and cards shade instead of shrinking. */
+:is(.btn,.chip-btn,.name-btn,.tick,.plus,.slot,.more,.x,.link,.chip button,.seg button,.stepper button,.step button){transition:transform var(--pop-ms) var(--pop),background-color 140ms,color 140ms}
+:is(.chip-btn,.tick,.plus,.slot,.more,.x,.chip button,.seg button,.stepper button,.step button):active:not(:disabled){transform:scale(.94);transition-duration:70ms;transition-timing-function:ease-out}
+:is(.btn,.name-btn):active:not(:disabled){transform:scale(.97);transition-duration:70ms;transition-timing-function:ease-out}
+.link:active{opacity:.6}
+:is(.r-main,.pc-head,.choice,.person > summary){transition:background-color 180ms}
+:is(.r-main,.pc-head,.choice,.person > summary):active{background-color:color-mix(in srgb,var(--ink) 6%,transparent);transition-duration:60ms}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
