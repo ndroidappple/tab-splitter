@@ -271,6 +271,7 @@ await step('once everyone has paid and nothing is uncovered, the totals add up t
   assert.equal(C.res.reduce((s, r) => s + r.total, 0) + C.pool, 18009);
   assert.equal(C.allPaid, true, JSON.stringify({ pool: C.pool, res: C.res.map((r) => [r.p.name, r.total, r.owed, r.settled]) }));
   await nick2.click('[data-act="close"]');
+  await nick2.click('#sheetBody [data-act="close-yes"]');
   assert.equal(raw().closed, true);
   assert.match(nick2.text('#app'), /This tab is closed/);
 });

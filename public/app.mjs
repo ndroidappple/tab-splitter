@@ -1,6 +1,6 @@
 // The tab page: start a tab (host), claim and pay (friends), and the host's panel.
 import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName, slotsOf } from './split.mjs';
-import { installMotion } from './motion.mjs';
+import { installMotion, still, dur, ease, anim, collapse, EXIT_EASE } from './motion.mjs';
 
 const API = '/api/tab';
 const LIVE = 'https://tabsplitterns.netlify.app';
@@ -21,11 +21,64 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
 };
-let toastT;
-function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3000);
+/* Toast (GymBuddy's quieter toast): a pill that rises over the dock. A tap anywhere but Undo puts it
+   away, and so does a swipe down or to either side, which it follows. Undo toasts stay 5 s, others 3 s.
+   `done` runs once it goes without Undo (timed out, tapped, swiped, or replaced by the next toast). */
+let toastEl = null, toastT;
+function toast(msg, { undo, done } = {}) {
+  const root = $('#toasts'), host = dlg.open && !closing ? dlg : document.body;
+  if (root.parentNode !== host) host.appendChild(root); // over an open sheet, which sits in the top layer
+  if (toastEl) dismissToast(toastEl);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="msg">${esc(msg)}</span>${undo ? '<button type="button">Undo</button>' : ''}`;
+  el._done = done;
+  if (undo) el.querySelector('button').addEventListener('click', () => { el._done = null; undo(); dismissToast(el); });
+  swipeAway(el);
+  root.appendChild(el); toastEl = el;
+  clearTimeout(toastT); toastT = setTimeout(() => dismissToast(el), undo ? 5000 : 3000);
+}
+function dismissToast(el, thrown) {
+  if (!el || el._gone) return;
+  el._gone = true;
+  if (toastEl === el) { toastEl = null; clearTimeout(toastT); }
+  if (el._done) { const d = el._done; el._done = null; d(); }
+  if (still()) { el.remove(); return; }
+  if (!thrown) el.classList.add('leaving');
+  setTimeout(() => el.remove(), dur('exit') + 40);
+}
+function swipeAway(el) {
+  let g = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+    g = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, on: false };
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!g || g.id !== e.pointerId) return;
+    g.dx = e.clientX - g.x; g.dy = Math.max(0, e.clientY - g.y); // down only: up has nowhere to go
+    if (!g.on && Math.max(Math.abs(g.dx), g.dy) < 6) return;
+    if (!g.on) { g.on = true; el.style.animation = 'none'; el.style.transition = 'none'; }
+    el.style.transform = `translate(${g.dx}px, ${g.dy}px)`;
+    el.style.opacity = String(1 - Math.min(0.6, Math.max(Math.abs(g.dx), g.dy) / 200));
+  });
+  const up = (e) => {
+    if (!g || g.id !== e.pointerId) return;
+    const d = g; g = null;
+    if (!d.on) { if (e.type === 'pointerup') dismissToast(el); return; } // a tap
+    if (e.type === 'pointerup' && Math.max(Math.abs(d.dx), d.dy) > 44) {
+      // Off the way it was thrown.
+      el.style.transition = still() ? 'none' : `transform ${dur('exit')}ms ${EXIT_EASE}, opacity ${dur('exit')}ms ${EXIT_EASE}`;
+      el.style.transform = Math.abs(d.dx) > d.dy ? `translateX(${Math.sign(d.dx) * (el.offsetWidth + 40)}px)` : `translateY(${d.dy + 60}px)`;
+      el.style.opacity = '0';
+      dismissToast(el, true);
+    } else {
+      el.style.transition = `transform ${dur('slide')}ms ${ease('slide')}, opacity ${dur('slide')}ms ${ease('slide')}`;
+      el.style.transform = ''; el.style.opacity = '';
+    }
+  };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
 }
 const CHECK = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -269,6 +322,25 @@ const openCards = new Set(); // person cards the viewer has expanded
 let sheet = null;
 let lastActivity = Date.now();
 let payReturn = null; // { amt } while someone is off in Venmo
+const leaving = new Set(); // people the host removed, hidden while Undo is offered; sent when it goes
+
+/* Undo for a payment: marking paid undoes with "unpaid"; undoing a payment puts the same amount back.
+   Offered only when that gets the person back exactly as they were. */
+const undoPaid = (p) => (T.people[p] && T.people[p].paid == null ? () => act({ op: 'unpaid', p }, 'Payment undone') : undefined);
+function undoUnpaid(p) {
+  const was = T.people[p];
+  if (!was || !was.paid || was.waived || (was.ok && !isHost)) return undefined;
+  return () => act({ op: 'paid', p, amount: was.paid, how: 'other' }, 'Payment put back');
+}
+async function removePerson(p) {
+  const name = nameOf(p);
+  const card = app.querySelector(`details.pc[data-p="${p}"]`);
+  await collapse(card && card.closest('.person-card'));
+  leaving.add(p); openPeople.delete(p); openCards.delete(p);
+  renderAll();
+  const send = () => { if (leaving.delete(p)) act({ op: 'remove', p }); };
+  toast(`Removed ${name}. Their items are unclaimed again.`, { undo: () => { leaving.delete(p); renderAll(); }, done: send });
+}
 
 function units(i, p) {
   const k = i + '|' + p;
@@ -333,8 +405,8 @@ async function flush() {
     else { if (e.status !== 409) online(false); scheduleFlush(e.status === 409 ? 400 : 3000); }
   } finally { flushing = false; }
 }
-async function act(b, okMsg) {
-  try { const r = await post(body(b)); accept(r.state); if (okMsg) toast(okMsg); return r; } catch (e) { toast(e.message); poll(true); return null; }
+async function act(b, okMsg, undo) {
+  try { const r = await post(body(b)); accept(r.state); if (okMsg) toast(okMsg, { undo }); return r; } catch (e) { toast(e.message); poll(true); return null; }
 }
 
 let pollT = null, polling = false;
@@ -524,7 +596,7 @@ function statusOf(r) {
 }
 
 function peoplePanel(C) {
-  const others = C.res.filter((r) => r.p.id !== HOST);
+  const others = C.res.filter((r) => r.p.id !== HOST && !leaving.has(r.p.id));
   const pct = C.expected ? Math.min(100, Math.round((C.collected / C.expected) * 100)) : 0;
   let html = `<div class="card"><h3 class="money">${fmt(C.collected)} of ${fmt(C.expected)} paid back</h3>
     <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div></div>`;
@@ -636,11 +708,111 @@ function renderDock(C) {
 }
 
 /* ---------- Sheets ---------- */
-const dlg = $('#sheet');
-function openSheet(s) { sheet = s; const b = $('#sheetBody'); b._h = null; renderSheet(compute_()); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } }
-function closeSheet() { sheet = null; if (dlg.open) { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); } }
-dlg.addEventListener('close', () => { sheet = null; const b = $('#sheetBody'); b._h = null; b.innerHTML = ''; });
-dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); });
+/* GymBuddy's sheet: rises from the bottom edge on the surface spring while the scrim fades in, slides
+   back down however it closes, and moves to a new sheet by easing its height. */
+const dlg = $('#sheet'), panel = $('#sheetPanel'), scrim = $('#scrim'), sheetWrap = $('#sheetWrap');
+let closing = null;
+function openSheet(s) {
+  const b = $('#sheetBody');
+  if (dlg.open && !closing) { // already up: swap what it shows
+    const h0 = panel.offsetHeight;
+    sheet = s; b._h = null; renderSheet(compute_()); b.scrollTop = 0;
+    const h1 = panel.offsetHeight;
+    if (Math.abs(h1 - h0) > 1) {
+      const a = anim(panel, [{ height: `${h0}px` }, { height: `${h1}px` }], 'surface');
+      if (a) { panel.style.overflow = 'hidden'; a.finished.catch(() => {}).then(() => { panel.style.overflow = ''; }); }
+    }
+    anim(b, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], 'enter');
+    return;
+  }
+  if (closing) { closing = null; stopSheetMotion(); } // reopened on its way out
+  sheet = s; b._h = null; renderSheet(compute_());
+  if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+  document.documentElement.style.overflow = 'hidden';
+  fitSheet();
+  anim(panel, [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], 'surface');
+  anim(scrim, [{ opacity: 0 }, { opacity: 1 }], 'enter');
+}
+function stopSheetMotion() {
+  for (const el of [panel, scrim]) if (el.getAnimations) el.getAnimations().forEach((x) => x.cancel());
+  panel.style.transform = ''; scrim.style.opacity = '';
+}
+/** Closes the sheet now as far as the page is concerned; the slide down finishes on its own. */
+function closeSheet() {
+  sheet = null;
+  if (!dlg.open || closing) return;
+  const tok = closing = {};
+  const done = () => {
+    if (closing !== tok) return; // reopened meanwhile
+    closing = null;
+    if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
+    const b = $('#sheetBody'); b._h = null; b.innerHTML = '';
+    document.documentElement.style.overflow = '';
+    document.body.appendChild($('#toasts'));
+    stopSheetMotion();
+  };
+  const at = panel.animate ? getComputedStyle(panel).transform : 'none'; // where a drag left it
+  const opts = { duration: dur('exit') + 20, easing: EXIT_EASE, fill: 'forwards' };
+  const a = still() ? null : anim(panel, [{ transform: at === 'none' ? 'translateY(0)' : at }, { transform: 'translateY(100%)' }], 'exit', opts);
+  if (!a) { done(); return; }
+  anim(scrim, [{ opacity: getComputedStyle(scrim).opacity }, { opacity: 0 }], 'exit', opts);
+  a.finished.catch(() => {}).then(done);
+}
+dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); }); // Escape
+scrim.addEventListener('click', () => closeSheet());
+
+/* The sheet stays in the part of the screen the keyboard leaves visible. */
+const vv = window.visualViewport;
+function fitSheet() { if (!vv) return; sheetWrap.style.setProperty('--vv-top', `${vv.offsetTop}px`); sheetWrap.style.setProperty('--vv-h', `${vv.height}px`); }
+if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll', fitSheet); }
+
+/* Drag down to close, from the grab bar and title, or from the content when it's scrolled to the top.
+   Far (140 px or 35%) or fast (0.5 px/ms) closes from where the finger let go; otherwise it springs back.
+   Text fields keep their own gestures. */
+{
+  const START = 8, FAR = 140, FLICK = 0.5;
+  let g = null;
+  panel.addEventListener('touchstart', (e) => {
+    g = null;
+    if (e.touches.length !== 1 || closing || e.target.closest('input, textarea, select')) return;
+    for (let el = e.target; el && el !== panel; el = el.parentElement) if (el.scrollTop > 0) return; // scroll back up first
+    g = { x: e.touches[0].clientX, y: e.touches[0].clientY, dy: 0, on: null, trail: [] };
+  }, { passive: true });
+  panel.addEventListener('touchmove', (e) => {
+    if (!g || g.on === false) return;
+    const p = e.touches[0];
+    if (g.on === null) {
+      const dx = p.clientX - g.x, dy = p.clientY - g.y;
+      if (Math.hypot(dx, dy) < START) return;
+      g.on = dy > 0 && dy > Math.abs(dx);
+      if (!g.on) return;
+      g.y += START; // the dead zone doesn't count, so the sheet doesn't jump when it starts following
+      panel.classList.add('dragging');
+    }
+    e.preventDefault();
+    g.dy = Math.max(0, p.clientY - g.y);
+    panel.style.transform = `translateY(${g.dy}px)`;
+    scrim.style.opacity = String(1 - Math.min(1, g.dy / panel.offsetHeight));
+    g.trail.push([p.clientY, e.timeStamp]); if (g.trail.length > 5) g.trail.shift();
+  }, { passive: false });
+  const end = (e) => {
+    const d = g; g = null;
+    if (!d || !d.on) return;
+    panel.classList.remove('dragging');
+    const [a, z] = [d.trail[0], d.trail[d.trail.length - 1]];
+    const speed = a && z && z[1] > a[1] ? (z[0] - a[0]) / (z[1] - a[1]) : 0;
+    if (e.type === 'touchend' && (d.dy > Math.min(FAR, panel.offsetHeight * 0.35) || (speed > FLICK && d.dy > 24))) {
+      if (sheet && sheet.type === 'paycheck') payReturn = null;
+      closeSheet();
+      return;
+    }
+    const at = panel.style.transform;
+    panel.style.transform = ''; scrim.style.opacity = '';
+    if (at) anim(panel, [{ transform: at }, { transform: 'translateY(0)' }], 'surface');
+  };
+  panel.addEventListener('touchend', end);
+  panel.addEventListener('touchcancel', end);
+}
 const done = (label = 'Done') => `<button type="button" class="btn ghost wide" data-act="close-sheet">${label}</button>`;
 
 function renderSheet(C) {
@@ -727,6 +899,9 @@ function renderSheet(C) {
       <p class="sub">Send the link to the group chat. Everyone taps their name, picks what they had and pays you.</p>
       <div class="sh-foot"><button type="button" class="btn wide" data-act="share">Send the link</button>${done('Later')}</div>
       <p class="note">This phone is now the host. Keep this page’s address to manage the tab from another device: ${esc(location.origin)}/t/${tabId}#h=${esc(hostKey)}</p></div>`);
+  } else if (s.type === 'close') {
+    setHTML(b, `<div class="sh"><h2 id="sheetTitle">Close the tab?</h2><p class="sub">Nobody can change their items after this. You can reopen it.</p>
+      <div class="sh-foot"><button type="button" class="btn wide" data-act="close-yes">Close the tab</button>${done('Cancel')}</div></div>`);
   } else if (s.type === 'who') {
     if (b.querySelector('#renameInput')) return;
     const p = T.people[me];
@@ -813,11 +988,11 @@ app.addEventListener('click', (e) => {
   if (a === 'markpaid') openSheet({ type: 'markpaid', p: b.dataset.p });
   if (a === 'confirm') act({ op: 'confirm', p: b.dataset.p }, `Confirmed ${nameOf(b.dataset.p)}’s payment`);
   if (a === 'waive') act({ op: 'waive', p: b.dataset.p }, 'Let it go');
-  if (a === 'unpaid') act({ op: 'unpaid', p: b.dataset.p }, 'Payment undone');
-  if (a === 'remove' && confirm(`Remove ${nameOf(b.dataset.p)}? Their items go back to unclaimed.`)) { openPeople.delete(b.dataset.p); act({ op: 'remove', p: b.dataset.p }, 'Removed'); }
+  if (a === 'unpaid') act({ op: 'unpaid', p: b.dataset.p }, 'Payment undone', undoUnpaid(b.dataset.p));
+  if (a === 'remove') removePerson(b.dataset.p);
   if (a === 'share') shareLink();
   if (a === 'report') window.open(`/api/report?t=${tabId}&key=${encodeURIComponent(hostKey)}`, '_blank', 'noopener');
-  if (a === 'close' && confirm('Close the tab? Nobody can change it after this, but you can reopen it.')) act({ op: 'close' }, 'Tab closed');
+  if (a === 'close') openSheet({ type: 'close' });
   if (a === 'reopen') act({ op: 'reopen' }, 'Tab reopened');
 });
 app.addEventListener('toggle', (e) => {
@@ -856,8 +1031,9 @@ $('#sheetBody').addEventListener('click', (e) => {
   if (a === 'share') { shareLink(); return; }
   if (a === 'venmo') { afterVenmo(Number(b.dataset.amt)); return; }
   if (a === 'other') { openSheet({ type: 'other' }); return; }
-  if (a === 'paidyes') { payReturn = null; closeSheet(); act({ op: 'paid', p: me, amount: Number(b.dataset.amt), how: 'venmo' }, 'Marked as paid. Thanks!'); return; }
-  if (a === 'unpaid-me') { closeSheet(); act({ op: 'unpaid', p: me }, 'Payment undone'); return; }
+  if (a === 'paidyes') { payReturn = null; closeSheet(); act({ op: 'paid', p: me, amount: Number(b.dataset.amt), how: 'venmo' }, 'Marked as paid. Thanks!', undoPaid(me)); return; }
+  if (a === 'close-yes') { closeSheet(); act({ op: 'close' }, 'Tab closed', () => act({ op: 'reopen' }, 'Tab reopened')); return; }
+  if (a === 'unpaid-me') { closeSheet(); act({ op: 'unpaid', p: me }, 'Payment undone', undoUnpaid(me)); return; }
   if (a === 'switch') { closeSheet(); me = null; store.set('tab-me:' + tabId, null); renderAll(); return; }
   if (s.type === 'item') {
     const it = T.items.find((x) => x.id === s.i); if (!it) return;
@@ -895,7 +1071,7 @@ $('#sheetBody').addEventListener('submit', (e) => {
     if (!Number.isInteger(c) || c <= 0) { toast('Enter an amount'); return; }
     const p = s.type === 'other' ? me : s.p;
     closeSheet();
-    act({ op: 'paid', p, amount: c, how: 'other' }, s.type === 'other' ? 'Recorded. Thanks!' : `Marked ${nameOf(p)} as paid`);
+    act({ op: 'paid', p, amount: c, how: 'other' }, s.type === 'other' ? 'Recorded. Thanks!' : `Marked ${nameOf(p)} as paid`, undoPaid(p));
   }
   if (e.target.id === 'renameForm') {
     const name = $('#renameInput').value.trim(); if (!name) return;
@@ -903,7 +1079,7 @@ $('#sheetBody').addEventListener('submit', (e) => {
   }
 });
 window.addEventListener('online', () => { if (tabId) { poll(); if (pend.size || pendOps.length) scheduleFlush(50); } });
-window.addEventListener('pagehide', () => { if (pend.size || pendOps.length) flush(); });
+window.addEventListener('pagehide', () => { if (pend.size || pendOps.length) flush(); if (toastEl) dismissToast(toastEl); }); // a pending remove goes now
 window.addEventListener('popstate', () => location.reload());
 
 /* ---------- Start ---------- */

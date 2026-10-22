@@ -10,7 +10,9 @@ const SPRINGS = {
   surface: { f: 1.9, z: 0.9, fallback: 'cubic-bezier(.2, 1, .3, 1)' },  // sheets, screens, the dock
 };
 // Exits run quicker than entrances and speed up as they go, so closing feels immediate.
-const EXIT_MS = 200, EXIT_EASE = 'cubic-bezier(.4, 0, 1, 1)';
+const EXIT_MS = 200;
+export const EXIT_EASE = 'cubic-bezier(.4, 0, 1, 1)';
+const MS = {}, EASE = {};
 
 /** Closed-form step response of a damped spring released at 0 and settling on 1, t in seconds. */
 function spring(t, f, z) {
@@ -31,6 +33,26 @@ const reduceQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-redu
 /** Reduce Motion is on (or the browser can't say): things land at once. */
 export const still = () => !reduceQuery || reduceQuery.matches;
 
+/** How long a spring (or 'exit') runs right now, in ms: 0 with Reduce Motion. */
+export const dur = (name) => (still() ? 0 : name === 'exit' ? EXIT_MS : MS[name] || 0);
+export const ease = (name) => (name === 'exit' ? EXIT_EASE : EASE[name]);
+
+/** Animates el on a named spring. Returns the Animation, or null when nothing moves (Reduce Motion, no Web Animations). */
+export function anim(el, frames, name, extra) {
+  if (still() || !el || !el.animate) return null;
+  return el.animate(frames, Object.assign({ duration: dur(name), easing: ease(name) }, extra));
+}
+
+/** Folds an element away (height, padding, margins, opacity) so whatever is below glides up. Resolves when done. */
+export function collapse(el) {
+  if (!el || still() || !el.animate) return Promise.resolve();
+  const s = getComputedStyle(el);
+  const keep = { height: `${el.offsetHeight}px`, paddingTop: s.paddingTop, paddingBottom: s.paddingBottom, marginTop: s.marginTop, marginBottom: s.marginBottom, opacity: s.opacity };
+  const gone = { height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 };
+  el.style.overflow = 'hidden';
+  return el.animate([keep, gone], { duration: EXIT_MS + 40, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }).finished.catch(() => {});
+}
+
 /** Puts the springs and the exit curve on :root for the stylesheet. With Reduce Motion every duration is 0. */
 export function installMotion() {
   const linearOk = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)');
@@ -38,6 +60,7 @@ export function installMotion() {
   for (const [name, { f, z, fallback }] of Object.entries(SPRINGS)) {
     const ms = settleMs(f, z), steps = Math.ceil(ms / 10); // a point every ~10 ms keeps the curve smooth
     const ease = linearOk ? `linear(${Array.from({ length: steps + 1 }, (_, i) => (i === steps ? 1 : +spring((i / steps) * ms / 1000, f, z).toFixed(4))).join(', ')})` : fallback;
+    MS[name] = ms; EASE[name] = ease;
     s.setProperty(`--${name}`, ease);
     s.setProperty(`--${name}-ms`, `${still() ? 0 : ms}ms`);
   }
