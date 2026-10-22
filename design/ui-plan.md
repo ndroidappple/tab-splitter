@@ -22,9 +22,18 @@ GymBuddy's polish comes from a few systems, not one-off effects. Each one ports 
 
 Left out on purpose: coaches, GymBuddy's look (Lexend, thick drop lips, day colors), help tap-through cards, hold to edit, sounds (the earshot branch isn't merged in GymBuddy either) and a tab bar. Friends use Tab once per dinner and need to finish in under a minute.
 
+## Decisions (Oct 22): host first, new look
+
+After a UX review, these replace the Oct 21 "keep today's look" decision.
+
+- **The host is the main user.** They enter the receipt and either assign the items themselves (a "tapping for" strip of names on Items) or send the link for the rest. Creating a tab asks which, and both can be mixed.
+- **Build for strangers too.** A home screen that explains the three steps and lists your recent tabs; a host link you copy, never shown raw; Venmo, Cash App, PayPal and Zelle.
+- **New look, still light.** Warm neutrals, one indigo accent, floating dock and header, cards without borders. Green means paid, amber means waiting on someone, red only means something is wrong. System font, no web fonts.
+- **Totals can be private.** A host setting hides everyone else's totals and the People view from friends. It's a display setting: the tab's data still reaches every phone, because claiming needs it.
+
 ## Decisions (Oct 21)
 
-- **Keep today's look.** Same cards, colors, system font and dock. Only the motion and the components above change. No receipt strip, highlighter, PAID stamp, scan line or new fonts.
+- ~~**Keep today's look.**~~ Replaced on Oct 22, above.
 - **Regroup only on arrival.** Items sort into Needs someone and Claimed when you come to the list (opening the tab, picking your name, switching from People). While you're on it, nothing moves: a ticked row keeps its place, its check and tint pop in, and the dock total rolls.
 - **No toasts for other people's claims.** Their changes update the row in place with a short tint in their color. The host still gets a toast when someone pays.
 
@@ -39,8 +48,8 @@ Four phases, each shipping on its own, behind a Netlify deploy preview.
 
 1. **Motion foundation** (done). `public/motion.mjs` puts the springs on `:root`; presses on every control; the chevron and toast ride the springs; Reduce Motion zeroes every duration. `anim()`, `collapse()`/`expand()`, `roll()` and keyed `patch()` with FLIP join `motion.mjs` in the phases that first use them.
 2. **Sheets and toasts** (done). Sheets rise, drag down to close, slide away however they close, and follow the keyboard. Toasts rise, tap or swipe away, and carry Undo for marking paid, undoing a payment and closing the tab. Remove person folds the card away and is sent when the Undo toast goes. Closing the tab asks in a sheet.
-3. **Items list.** Render rows by key with `patch()`, so a tap updates one row instead of the whole list. Group rows when the list is opened, not on every render. Add the rolling dock total, tick and slot pops, and the quiet tint for other people's changes.
-4. **Screens.** View transitions for setup, join and People ⇄ Items. Sliding pill. History entries instead of reloading.
+3. **Items list** (partly done). Rows group when the list is opened, not on every render; ticks and slots pop. Still to do: keyed `patch()` rows, the rolling dock total, and the quiet tint for other people's changes.
+4. **Screens** (partly done). Setup steps are history entries, so Back goes back a step and a reload keeps your place; the draft is saved as you type. The People / Items pill slides. Still to do: view transitions between screens.
 
 ## Things to watch
 

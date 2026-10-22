@@ -51,6 +51,13 @@ async function phone(path) {
   return { w, $, click, type, submit, settle, text, shared };
 }
 
+// Phones share Node's globals; switch them back before using an earlier phone again.
+function use(ph) {
+  const w = ph.w;
+  Object.assign(globalThis, { window: w, document: w.document, location: w.location, history: w.history, localStorage: w.localStorage });
+  Object.defineProperty(globalThis, 'navigator', { value: w.navigator, configurable: true });
+}
+
 let failures = 0;
 const step = async (name, fn) => { try { await fn(); console.log('ok  ', name); } catch (e) { failures++; console.log('FAIL', name, '\n    ', e.stack.split('\n').slice(0, 4).join('\n     ')); } };
 
@@ -79,6 +86,9 @@ await step('typing the Wild Tomato receipt shows tax, fees and tip as the differ
   await nick.type('#tTitle', 'Wild Tomato');
   await nick.type('#charge', '180.09');
   assert.match(nick.text('#reviewStatus'), /Tax, fees and tip: \$40\.09/);
+  const draft = JSON.parse(nick.w.localStorage.getItem('tab-draft'));
+  assert.equal(draft.items.length, WILD.length, 'the receipt is saved as it is typed');
+  assert.equal(draft.charge, '180.09');
 });
 await step('adding people and creating the tab makes Nick the host', async () => {
   await nick.click('[data-act="toPeople"]');
@@ -92,7 +102,9 @@ await step('adding people and creating the tab makes Nick the host', async () =>
   tabId = m[1];
   hostKey = nick.w.localStorage.getItem('tab-host:' + tabId);
   assert.ok(hostKey);
-  assert.ok(nick.$('#sheet').hasAttribute('open'), 'the "send the link" sheet opens');
+  assert.ok(nick.$('#sheet').hasAttribute('open'), 'the "your tab is ready" sheet opens');
+  assert.ok(nick.$('#sheetBody [data-act="go-assign"]') && nick.$('#sheetBody [data-act="share"]'), 'assign it yourself, or send the link');
+  assert.equal(nick.w.localStorage.getItem('tab-draft'), null, 'the draft is gone once the tab exists');
   assert.equal(raw().charge, 18009);
   assert.equal(raw().payer.venmo, 'nick-szambelan');
   assert.match(nick.text('#app'), /People/);
@@ -100,6 +112,10 @@ await step('adding people and creating the tab makes Nick the host', async () =>
 await step('Nick claims his own items and adds Ben’s for him', async () => {
   await nick.click('[data-act="close-sheet"]');
   await nick.click('[data-act="view"][data-v="items"]');
+  assert.match(nick.text('.assign'), /Tapping for you/);
+  await nick.click(`[data-act="assignto"][data-p="${pid('Anna')}"]`);
+  assert.match(nick.text('.assign'), /Editing Anna’s items/);
+  await nick.click(`[data-act="assignto"][data-p="${HOST}"]`);
   await nick.click(`[data-act="toggle"][data-i="${iid('Large Sausage & Pesto')}"]`);
   await nick.click(`[data-act="toggle"][data-i="${iid('Bloody Mary')}"]`);
   await nick.click(`[data-act="slot"][data-i="${iid('Von Stiehl Cherry Cider DRFT')}"][data-owner=""]`);
@@ -184,7 +200,7 @@ await step('Anna claims her pizza and cider, and shares the curds with Nick', as
 });
 await step('Review and pay opens Venmo with the exact amount, and coming back marks her paid', async () => {
   await anna.click('#dockIn [data-act="mine"]');
-  const a = anna.$('#sheetBody a[data-act="venmo"]');
+  const a = anna.$('#sheetBody a[data-act="pay"][data-how="venmo"]');
   assert.ok(a);
   assert.match(a.href, /^https:\/\/venmo\.com\/nick-szambelan\?txn=pay&amount=/);
   assert.ok(a.href.includes('amount=' + (annaOwed / 100).toFixed(2)));
@@ -193,7 +209,7 @@ await step('Review and pay opens Venmo with the exact amount, and coming back ma
   anna.w.document.dispatchEvent(new anna.w.Event('visibilitychange'));
   Object.defineProperty(anna.w.document, 'hidden', { value: true, configurable: true });
   await new Promise((r) => setTimeout(r, 30));
-  assert.match(anna.text('#sheetBody'), /Did your Venmo go through\?/);
+  assert.match(anna.text('#sheetBody'), /Did your Venmo payment go through\?/);
   await anna.click('#sheetBody [data-act="paidyes"]');
   const p = raw().people[pid('Anna')];
   assert.equal(p.paid, annaOwed);
@@ -237,7 +253,7 @@ await step('"I paid another way" records $40, not the full amount', async () => 
 // ---------- Nick, back on his host link, settles the rest ----------
 const nick2 = await phone(`/t/${tabId}#h=${hostKey}`);
 await step('the host link restores the host view', async () => {
-  assert.match(nick2.text('#app'), /1 item needs someone/);
+  assert.match(nick2.text('#app'), /1 item not claimed yet/);
   assert.match(nick2.text('#app'), /Diet Coke/);
 });
 await step('Nick gives the Diet Coke to Ben and lets Ben’s remainder go', async () => {
@@ -260,6 +276,24 @@ await step('a private reminder names one person, their amount and their own link
   assert.match(msg, /^Hi Ben!/);
   assert.ok(msg.includes(`/t/${tabId}?p=${pid('Ben')}`));
   assert.doesNotMatch(msg, /Anna/);
+});
+await step('the host adds Cash App and keeps totals private: Ben sees only his own total and both ways to pay', async () => {
+  await nick2.click('[data-act="settings"]');
+  nick2.$('#cashapp').value = '$NickS';
+  nick2.$('#sPrivate').checked = true;
+  await nick2.submit('#settingsForm');
+  assert.equal(raw().private, true);
+  assert.equal(raw().payer.cashapp, 'NickS');
+  const ben2 = await phone(`/t/${tabId}?p=${pid('Ben')}`);
+  assert.equal(ben2.$('.seg'), null, 'no People view for friends');
+  await ben2.click('#dockIn [data-act="mine"]');
+  assert.ok(ben2.$('#sheetBody a[data-how="venmo"]'));
+  assert.match(ben2.$('#sheetBody a[data-how="cashapp"]').href, /^https:\/\/cash\.app\/\$NickS\/\d+\.\d\d$/);
+  use(nick2);
+  await nick2.click('[data-act="settings"]');
+  nick2.$('#sPrivate').checked = false;
+  await nick2.submit('#settingsForm');
+  assert.equal(raw().private, false);
 });
 await step('once everyone has paid and nothing is uncovered, the totals add up to the cent and the tab closes', async () => {
   const owed = compute(raw()).byId[pid('Ben')].owed;
