@@ -1,6 +1,6 @@
 # Tab
 
-Split any tab. The person who paid snaps the receipt; everyone taps their name, claims what they had (or splits evenly minus what they skipped), and pays back on Venmo in the same sitting. Tax, fees and tip are split in proportion to what each person had. Friends never need an account.
+Split any tab. The person who paid snaps the receipt, then assigns what they know and sends the link for the rest; everyone taps their name, claims what they had (or splits evenly minus what they skipped), and pays back on Venmo, Cash App, PayPal or Zelle in the same sitting. Tax, fees and tip are split in proportion to what each person had. Friends never need an account.
 
 ## Put it online (from your phone)
 
@@ -12,7 +12,8 @@ Pushing to `main` redeploys to production (15 credits each on the free plan). Pu
 
 ## How it works
 
-- `/` starts a new tab: take a photo of the receipt (or type it), check the lines and what your card was charged, add who was there, pick itemized or even split.
+- `/` starts a new tab: take a photo of the receipt (or type it), check the lines and what your card was charged, add who was there, pick itemized or even split. The draft is saved as you type, and recent tabs are listed here.
+- The host's Items view has a strip of names: tap one, then tap what they had. Tab settings change the name, the ways to pay, and whether friends see everyone's totals.
 - `/t/<tab id>` is the tab everyone opens. `?p=<person>` opens straight to one person (the link in private reminders). `#h=<host key>` is the host's private link; it's saved on the host's phone.
 - A person's total locks when they pay, so later changes can't move it. Anything nobody claimed stays "not covered" until the host assigns it, splits it across everyone who hasn't paid, or covers it.
 

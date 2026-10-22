@@ -1,0 +1,1678 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Design prototype for design/ui-plan.md. Not served by the app (Netlify publishes public/ only). -->
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Tab Splitter Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{
+  /* Layout: one thermal-receipt strip on a slate ground, a tear-off total stub docked under it; sheets are paper too. */
+  --ground:#E1E5EA; --paper:#FFFFFF; --field:#EEF1F4; --ink:#15171C; --muted:#5A606E; --rule:#D4D9E0; --dots:#AAB1BD;
+  --warn:#B3261E; --warn-soft:#FBE5E2; --ok:#17703F; --ok-soft:#DDF0E4; --tweak:#8A5A00; --tweak-soft:#FBF0D9;
+  --btn:#15171C; --btn-ink:#FFFFFF; --scrim:rgba(12,14,18,.46); --lift:rgba(20,24,32,.13);
+  --me:#2F5BD3; --hl:34%;
+  --ui:"Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --gut-l:max(16px, env(safe-area-inset-left, 0px)); --gut-r:max(16px, env(safe-area-inset-right, 0px));
+  --safe-b:env(safe-area-inset-bottom, 0px); --safe-t:env(safe-area-inset-top, 0px);
+  /* Springs: lib/motion.js in GymBuddy, rebuilt in script below; these are the pre-script fallbacks. */
+  --enter:cubic-bezier(.16,1,.3,1); --enter-ms:375ms; --pop:cubic-bezier(.2,1.5,.4,1); --pop-ms:486ms;
+  --slide:cubic-bezier(.3,1.3,.5,1); --slide-ms:371ms; --surface:cubic-bezier(.2,1,.3,1); --surface-ms:486ms;
+  --exit:cubic-bezier(.4,0,1,1); --exit-ms:200ms; --slow:1;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D0F13; --paper:#1A1D23; --field:#252930; --ink:#EDEFF3; --muted:#A1A7B4; --rule:#2E333C; --dots:#4E5562;
+    --warn:#F2867C; --warn-soft:#3A1F1C; --ok:#5ACB8E; --ok-soft:#163027; --tweak:#F0C064; --tweak-soft:#33280F;
+    --btn:#EDEFF3; --btn-ink:#0D0F13; --scrim:rgba(0,0,0,.62); --lift:rgba(0,0,0,.45); --hl:46%;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D0F13; --paper:#1A1D23; --field:#252930; --ink:#EDEFF3; --muted:#A1A7B4; --rule:#2E333C; --dots:#4E5562;
+  --warn:#F2867C; --warn-soft:#3A1F1C; --ok:#5ACB8E; --ok-soft:#163027; --tweak:#F0C064; --tweak-soft:#33280F;
+  --btn:#EDEFF3; --btn-ink:#0D0F13; --scrim:rgba(0,0,0,.62); --lift:rgba(0,0,0,.45); --hl:46%;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}
+html.sheet-open{overflow:hidden}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.45 var(--ui);font-optical-sizing:auto;-webkit-font-smoothing:antialiased;padding-bottom:calc(36px + var(--safe-b))}
+body.has-dock{padding-bottom:calc(140px + var(--safe-b))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ground)}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:default}
+:focus-visible{outline:3px solid var(--me);outline-offset:2px}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.money,.price,.big{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.muted{color:var(--muted)}
+.eyebrow{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- Prototype bar (not part of the design) ---------- */
+.proto{background:var(--ink);color:var(--paper);view-transition-name:proto}
+.proto-in{max-width:560px;margin:0 auto;padding-block:7px;padding-left:var(--gut-l);padding-right:var(--gut-r);display:flex;align-items:center;gap:6px}
+.proto-in > b{margin-right:auto;font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.8}
+.pt{min-height:32px;padding:0 11px;border-radius:999px;border:1px solid color-mix(in srgb,var(--paper) 32%,transparent);background:transparent;color:inherit;font-weight:650;font-size:13px;white-space:nowrap}
+.pt[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.pt.go{background:var(--me);border-color:var(--me);color:#fff}
+
+/* ---------- Header ---------- */
+.top{position:sticky;top:var(--safe-t);z-index:5;background:var(--ground);view-transition-name:top}
+.top-in{max-width:560px;margin:0 auto;padding-block:10px;padding-left:var(--gut-l);padding-right:var(--gut-r);display:flex;align-items:center;gap:12px;min-height:60px}
+.brand{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.brand strong{font-size:19px;font-weight:750;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand span{font-size:13px;color:var(--muted);font-family:var(--mono);letter-spacing:-.01em}
+.chip-btn{display:inline-flex;align-items:center;gap:8px;max-width:52%;border:0;background:var(--paper);border-radius:999px;padding:4px 13px 4px 4px;min-height:40px;font-weight:650;font-size:14.5px;box-shadow:0 1px 2px var(--lift)}
+.chip-btn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.wrap{max-width:560px;margin:0 auto;padding-block:4px 0;padding-left:var(--gut-l);padding-right:var(--gut-r)}
+h1{font-size:32px;font-weight:800;line-height:1.08;letter-spacing:-.03em;margin:10px 0 8px;text-wrap:balance}
+.h2{font-size:18px;font-weight:750;margin:22px 0 8px;letter-spacing:-.01em}
+.lede{color:var(--muted);margin:0 0 20px;font-size:16.5px;max-width:38ch}
+.note{color:var(--muted);font-size:14px;margin:6px 2px 0}
+.stack{display:flex;flex-direction:column;gap:10px}
+.row2{display:flex;gap:8px;flex-wrap:wrap}
+.row2 > *{flex:1 1 140px;min-width:0}
+.row2.tight > .btn{flex:0 0 auto}
+
+/* ---------- Controls ---------- */
+.btn{min-height:52px;padding:0 20px;border-radius:14px;border:0;background:var(--btn);color:var(--btn-ink);font-weight:700;font-size:16.5px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center;text-decoration:none}
+.btn.wide{width:100%}
+.btn.ghost{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--rule)}
+.btn.sm{min-height:40px;padding:0 13px;font-size:14.5px;border-radius:11px}
+.btn:disabled{opacity:.45}
+.link{background:none;border:0;color:var(--me);font-weight:650;padding:10px 2px;text-decoration:underline;text-underline-offset:3px}
+/* Presses (GymBuddy's press rule): down in 70 ms, back on the pop spring. Rows shade instead. */
+.btn,.tick,.slot,.name-btn,.chip-btn,.pt,.vote button,.choice,.step button,.chip button,.x{transition:transform var(--pop-ms) var(--pop),background-color 140ms,color 140ms,box-shadow 140ms,border-color 140ms}
+:is(.btn,.tick,.slot,.name-btn,.chip-btn,.pt,.vote button,.step button,.chip button,.x):active:not(:disabled){transform:scale(.94);transition-duration:calc(70ms * var(--slow));transition-timing-function:ease-out}
+:is(.btn,.choice,.name-btn):active:not(:disabled){transform:scale(.975)}
+.l-main,.pc-head{transition:background-color 180ms}
+.l-main:active,.pc-head:active{background:color-mix(in srgb,var(--ink) 6%,transparent);transition-duration:calc(60ms * var(--slow))}
+
+label.f{display:block;font-weight:650;font-size:14.5px;margin:14px 0 6px}
+.in{width:100%;min-height:48px;border-radius:12px;border:1.5px solid var(--rule);background:var(--paper);padding:0 12px;font-size:16px}
+.in.money{text-align:right}
+textarea.in{padding:10px 12px;min-height:72px;resize:vertical}
+.ie-head,.ie{display:grid;grid-template-columns:minmax(0,1fr) 52px 88px 40px;gap:6px;align-items:center}
+.ie-head{font-size:12.5px;color:var(--muted);font-weight:600;padding:0 2px 4px}
+.items-edit{display:flex;flex-direction:column;gap:8px}
+.ie .in{min-height:44px;padding:0 8px}
+.x{width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:22px;border-radius:10px}
+.banner{border-radius:12px;padding:10px 12px;font-size:14.5px;font-weight:600;margin:12px 0 0;background:var(--field)}
+.banner.ok{background:var(--ok-soft);color:var(--ok)}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.once-pop{animation:pop var(--pop-ms) var(--pop) both}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:2px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--rule);border-radius:999px;padding:3px 3px 3px 13px;font-weight:600;font-size:15px}
+.chip button{border:0;background:none;width:32px;height:32px;border-radius:50%;color:var(--muted);font-size:18px}
+.chip.once-pop{animation:pop var(--pop-ms) var(--pop) both}
+.choice{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:14px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--rule);margin-bottom:8px;cursor:pointer}
+.choice:has(input:checked){box-shadow:inset 0 0 0 2px var(--ink)}
+.choice input{accent-color:var(--ink);width:20px;height:20px;margin:2px 0 0;flex:none}
+.choice b{display:block}
+.choice span span{color:var(--muted);font-size:14px}
+.sh-foot{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+
+.av{width:28px;height:28px;border-radius:50%;background:var(--pc);color:#fff;display:inline-grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.av.lg{width:42px;height:42px;font-size:18px}
+.names{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:18px}
+.name-btn{display:flex;align-items:center;gap:10px;padding:9px 12px 9px 9px;border:0;background:var(--paper);border-radius:14px;text-align:left;min-height:62px;font-weight:700;font-size:16.5px;box-shadow:0 1px 2px var(--lift)}
+
+/* ---------- People / Items switch: GymBuddy's tab pill, sliding on the slide spring ---------- */
+.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:3px;margin:4px 0 6px;border-radius:13px;background:color-mix(in srgb,var(--ink) 8%,var(--ground));view-transition-name:seg}
+.seg-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 4.5px);border-radius:10px;background:var(--paper);box-shadow:0 1px 2px var(--lift);transform:translateX(calc(var(--i,1) * (100% + 3px)));transition:transform var(--slide-ms) var(--slide)}
+.seg button{position:relative;z-index:1;min-height:40px;border:0;background:transparent;border-radius:10px;font-weight:650;font-size:15px;color:var(--muted);transition:color 140ms}
+.seg button[aria-selected="true"]{color:var(--ink)}
+
+/* ---------- The receipt ---------- */
+.receipt{position:relative;background:var(--paper);margin:20px 0 28px;padding:14px 0 8px}
+.receipt::before,.receipt::after,.pic::after,.stub::before{content:"";position:absolute;left:0;right:0;height:10px;background-size:12px 10px;background-repeat:repeat-x}
+.receipt::before,.stub::before{top:-9px;background-image:linear-gradient(to top right,var(--paper) 50%,transparent 50%),linear-gradient(to top left,var(--paper) 50%,transparent 50%)}
+.receipt::after,.pic::after{bottom:-9px;background-image:linear-gradient(to bottom right,var(--paper) 50%,transparent 50%),linear-gradient(to bottom left,var(--paper) 50%,transparent 50%)}
+.r-head{padding:4px 18px 14px;text-align:center;font-family:var(--mono);font-size:12.5px;color:var(--muted);line-height:1.55;border-bottom:1.5px dashed var(--rule)}
+.r-head b{display:block;font-size:15px;font-weight:600;letter-spacing:.16em;color:var(--ink);margin-bottom:2px}
+.sect{display:flex;align-items:center;gap:8px;padding:18px 18px 4px;font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sect::after{content:"";flex:1;border-bottom:1.5px dashed var(--rule)}
+.sect.plain{padding:20px 4px 8px}
+.sect.plain::after{display:none}
+.count{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:0;border-radius:999px;padding:1px 8px;background:var(--field);color:var(--ink)}
+.count.warn{background:var(--warn-soft);color:var(--warn)}
+.count.ok{background:var(--ok-soft);color:var(--ok)}
+.line{display:flex;align-items:center;gap:2px;padding-right:12px;position:relative;--hlc:color-mix(in srgb,var(--me) var(--hl),transparent)}
+.line.slotted{flex-direction:column;align-items:stretch;gap:0;padding-right:0}
+.l-row{display:flex;padding-right:12px}
+.l-main{flex:1;min-width:0;border:0;background:none;text-align:left;padding:10px 6px 10px 18px;display:flex;flex-direction:column;gap:3px;border-radius:0 12px 12px 0}
+.l-top{display:flex;align-items:baseline}
+.l-name{font-weight:620;font-size:16.5px;line-height:1.3;min-width:0}
+.qty{font-family:var(--mono);font-size:14px;color:var(--muted);font-weight:500}
+/* The highlighter: what you had gets a swipe in your color. Background-size so it follows wrapped lines. */
+.hl{background-image:linear-gradient(var(--hlc),var(--hlc));background-repeat:no-repeat;background-position:0 90%;background-size:0% .8em;-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:0 .14em;margin:0 -.14em;border-radius:.2em}
+.mine .hl{background-size:100% .8em}
+.once-draw .hl{animation:hl-draw var(--slide-ms) var(--slide) both}
+.once-erase .hl{animation:hl-erase var(--exit-ms) var(--exit) both}
+.lead{flex:1;min-width:14px;border-bottom:2px dotted var(--dots);margin:0 8px;transform:translateY(-.32em)}
+.price{font-size:15px;font-weight:500;white-space:nowrap}
+.price small{font-size:12px;color:var(--muted)}
+.l-meta{display:flex;flex-wrap:wrap;align-items:center;gap:3px 10px;font-size:13.5px;color:var(--muted)}
+.l-meta .warn{color:var(--warn);font-weight:650}
+.who{display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+.dots{display:inline-flex}
+.dots .av{width:19px;height:19px;font-size:10px;box-shadow:0 0 0 2px var(--paper)}
+.dots .av + .av{margin-left:-5px}
+.yours{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink)}
+.tick{width:44px;height:44px;flex:none;border-radius:50%;border:2px solid var(--rule);background:transparent;color:transparent;display:grid;place-items:center;padding:0}
+.tick[aria-pressed="true"]{background:var(--me);border-color:var(--me);color:#fff}
+.once-draw .tick svg,.tick.once-pop svg{animation:pop var(--pop-ms) var(--pop) both}
+.once-remote{animation:remote calc(1100ms * var(--slow)) ease-out}
+.slots{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 12px}
+.slot{width:40px;height:40px;border-radius:50%;padding:0;border:0;font-weight:700;font-size:15px;display:grid;place-items:center}
+.slot.open{border:2px dashed var(--dots);background:transparent;color:var(--muted);font-size:20px;font-weight:500}
+.slot.taken{background:var(--pc);color:#fff;opacity:.62}
+.slot.mine{background:var(--pc);color:#fff;box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--pc)}
+.slot.shared{font-size:12px;letter-spacing:-.02em}
+.slot.once-pop{animation:pop var(--pop-ms) var(--pop) both}
+.r-foot{margin-top:12px;padding:14px 18px 8px;border-top:1.5px dashed var(--rule);font-family:var(--mono);font-size:13.5px;color:var(--muted)}
+.lr{display:flex;align-items:baseline;padding:2px 0}
+.lr.tot{color:var(--ink);font-weight:600;font-size:15px;padding-top:6px}
+.thanks{text-align:center;letter-spacing:.24em;font-size:11.5px;padding-top:14px}
+
+/* ---------- People panel ---------- */
+.card{background:var(--paper);border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.sum{margin-top:16px}
+.sum-row{display:flex;align-items:baseline;gap:8px;margin-top:2px}
+.big{font-size:30px;font-weight:600;letter-spacing:-.03em}
+.bar{height:8px;border-radius:99px;background:var(--field);overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:99px;transform-origin:left}
+.attn h3{margin:0 0 4px;font-size:16px;font-weight:700}
+.attn h3 .money{color:var(--warn)}
+.mini{list-style:none;padding:0;margin:8px 0 0;font-family:var(--mono);font-size:13.5px}
+.mini li{display:flex;align-items:baseline;padding:3px 0}
+.mini li.muted{color:var(--muted)}
+.mini.open li{align-items:center;font-family:var(--ui);font-size:15px;font-weight:600}
+.mini.open .lead{transform:none}
+.mini.open li > span:first-child{min-width:0}
+.mini.open .btn{flex:none;white-space:nowrap}
+.pcard{padding:2px 4px;margin-bottom:8px}
+.pc-head{width:100%;border:0;background:none;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 10px;border-radius:12px;min-height:60px}
+.p-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.p-name b{font-weight:680;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-name small{font-size:13.5px;color:var(--muted)}
+.p-name small.due{color:var(--warn);font-weight:650}
+.p-name small.done{color:var(--ok);font-weight:650}
+.pc-total{font-family:var(--mono);font-weight:600;font-size:17px}
+.chev{flex:none;color:var(--muted);transition:transform var(--slide-ms) var(--slide)}
+.pcard.open .chev{transform:rotate(180deg)}
+.pc-body{padding:0 10px 12px 48px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.acts.flat{margin-top:0}
+
+/* ---------- The PAID stamp ---------- */
+.stamp{display:inline-block;font-family:var(--mono);font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ok);border:2.5px solid currentColor;border-radius:6px;padding:1px 6px 0 8px;transform:rotate(-8deg);line-height:1.35;vertical-align:middle}
+.stamp.sm{font-size:11.5px;border-width:2px;padding:0 4px 0 6px}
+.stamp.once-stamp{animation:stamp-in var(--pop-ms) var(--pop) both}
+
+/* ---------- The tear-off total (dock) ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:6;view-transition-name:dock;filter:drop-shadow(0 -3px 10px var(--lift))}
+.dock.once-dockin{animation:dock-in var(--surface-ms) var(--surface) both}
+.dock.leaving{animation:dock-out var(--exit-ms) var(--exit) both;pointer-events:none}
+.stub{position:relative;background:var(--paper)}
+.dock-in{max-width:560px;margin:0 auto;padding-block:12px calc(12px + var(--safe-b));padding-left:var(--gut-l);padding-right:var(--gut-r);display:flex;align-items:center;gap:12px}
+.dock-sum{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.dock-sum strong{font-family:var(--mono);font-size:28px;font-weight:600;letter-spacing:-.03em;margin:3px 0 2px;display:flex;align-items:center;gap:12px;white-space:nowrap}
+.dock-sum small{font-size:13px;color:var(--muted)}
+
+/* ---------- Rolling numbers (GymBuddy's Roll.jsx) ---------- */
+.roll{white-space:nowrap}
+.rd{position:relative;display:inline-block;white-space:pre}
+.ri{display:inline-block;animation:roll-in var(--enter-ms) var(--enter) calc(30ms * var(--slow)) both}
+.ro{position:absolute;left:0;top:0;animation:roll-out calc(140ms * var(--slow)) ease-out forwards}
+
+/* ---------- Start: the receipt being read ---------- */
+.pic{position:relative;width:148px;margin:6px auto 30px;background:var(--paper);padding:14px 12px 12px;transform:rotate(-3deg);box-shadow:0 12px 28px var(--lift);view-transition-name:receipt-pic}
+.pic.big{width:196px;transform:none;margin-bottom:26px}
+.pic i{display:block;height:5px;border-radius:3px;background:var(--rule);margin:7px 0}
+.pic i.c{width:56%;margin:0 auto 10px;height:7px;background:var(--ink);opacity:.75}
+.pic i.t{background:var(--ink);opacity:.75;margin-top:12px}
+.scanline{position:absolute;left:-8px;right:-8px;top:0;height:2px;border-radius:2px;background:var(--me);box-shadow:0 0 14px 3px color-mix(in srgb,var(--me) 55%,transparent);animation:scan calc(1300ms * var(--slow)) ease-in-out infinite alternate}
+.read{list-style:none;padding:0;margin:0;font-family:var(--mono);font-size:14px}
+.read li{display:flex;align-items:baseline;padding:4px 0}
+.read li.once-read{animation:read-in var(--enter-ms) var(--enter) both}
+.cascade > *{animation:view-in var(--enter-ms) var(--enter) both}
+.cascade > :nth-child(2){animation-delay:calc(30ms * var(--slow))}
+.cascade > :nth-child(3){animation-delay:calc(60ms * var(--slow))}
+.cascade > :nth-child(4){animation-delay:calc(90ms * var(--slow))}
+.cascade > :nth-child(5){animation-delay:calc(120ms * var(--slow))}
+.cascade > :nth-child(n+6){animation-delay:calc(150ms * var(--slow))}
+
+/* ---------- Sheets (GymBuddy's Sheet): rise from the edge, drag down to close, slide away ---------- */
+dialog.sheet-dlg{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;color:var(--ink);overflow:hidden}
+dialog.sheet-dlg::backdrop{background:transparent}
+.sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center;transition:height 300ms cubic-bezier(.38,.7,.125,1)}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.sheet-panel{position:relative;width:100%;max-width:560px;max-height:calc(100% - var(--safe-t) - 12px);display:flex;flex-direction:column;background:var(--paper);border-radius:22px 22px 0 0;box-shadow:0 -10px 40px var(--lift);outline:none}
+.sheet-panel.dragging{will-change:transform}
+.grab{width:42px;height:5px;border-radius:3px;background:var(--rule);margin:9px auto 0;flex:none}
+#sheetBody{overflow-y:auto;overscroll-behavior:contain;padding-block:10px calc(22px + var(--safe-b));padding-left:var(--gut-l);padding-right:var(--gut-r)}
+.sh h2{margin:0 0 4px;font-size:22px;font-weight:760;letter-spacing:-.02em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sh .sub{color:var(--muted);margin:0 0 12px;font-size:14.5px}
+.sheet-h{font-size:15px;font-weight:750;margin:20px 0 4px}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--rule)}
+.prow .grow{flex:1;min-width:0;font-weight:620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step{display:inline-flex;align-items:center;border-radius:12px;box-shadow:inset 0 0 0 1.5px var(--rule)}
+.step button{width:44px;height:44px;border:0;background:transparent;font-size:20px;border-radius:12px;padding:0}
+.step button:disabled{opacity:.3}
+.step output{min-width:24px;text-align:center;font-family:var(--mono);font-weight:600}
+.lines{list-style:none;padding:0;margin:4px 0 0;font-family:var(--mono);font-size:14.5px}
+.lines li{display:flex;align-items:baseline;padding:5px 0}
+.lines li.tot{font-weight:600;font-size:16px;border-top:1.5px dashed var(--rule);margin-top:6px;padding-top:10px}
+
+/* ---------- Toast (GymBuddy's quieter toast): rises, tap or swipe it away, plain-text Undo ---------- */
+#toasts{position:fixed;left:0;right:0;bottom:calc(24px + var(--safe-b));z-index:30;display:flex;justify-content:center;pointer-events:none;padding-left:var(--gut-l);padding-right:var(--gut-r);view-transition-name:toasts}
+body.has-dock > #toasts{bottom:calc(118px + var(--safe-b))}
+.toast{pointer-events:auto;position:absolute;bottom:0;width:max-content;max-width:min(528px,calc(100% - 32px));background:var(--ink);color:var(--paper);border-radius:22px;display:flex;align-items:center;gap:4px;min-height:44px;padding:2px 4px 2px 16px;box-shadow:0 8px 24px var(--lift);touch-action:none;-webkit-user-select:none;user-select:none;animation:rise var(--enter-ms) var(--enter) both}
+.toast .msg{font-weight:600;font-size:14.5px;line-height:1.3;padding:9px 12px 9px 0}
+.toast button{flex:none;min-height:40px;padding:0 13px;border:0;background:transparent;color:inherit;font-weight:800;font-size:14.5px;border-left:1px solid color-mix(in srgb,var(--paper) 25%,transparent);border-radius:0 18px 18px 0}
+.toast.leaving{animation:sink-out var(--exit-ms) var(--exit) forwards;pointer-events:none}
+
+dialog.away{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;padding:0;background:var(--ink);color:var(--paper)}
+dialog.away::backdrop{background:transparent}
+.away-in{height:100%;display:grid;place-content:center;justify-items:center;gap:10px;text-align:center;padding-left:var(--gut-l);padding-right:var(--gut-r)}
+.away-in h2{margin:0;font-size:26px;font-weight:780;letter-spacing:-.02em}
+.away-in p{margin:0;max-width:30ch;opacity:.8}
+.away-in .btn{background:var(--paper);color:var(--ink);margin-top:10px}
+
+/* ---------- Notes and feedback ---------- */
+.pats{list-style:none;padding:0;margin:0}
+.pat{display:grid;grid-template-columns:26px minmax(0,1fr);gap:0 8px;padding:13px 0;border-top:1px solid var(--rule)}
+.pat .num{font-family:var(--mono);font-weight:600;color:var(--muted);padding-top:1px}
+.pat b{font-weight:720;display:block}
+.pat .from{display:block;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:1px}
+.pat p{margin:4px 0 0;font-size:14.5px;color:var(--muted)}
+.vote{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.vote button{min-height:36px;padding:0 14px;border-radius:999px;border:1.5px solid var(--rule);background:transparent;font-weight:650;font-size:14px}
+.vote button[aria-pressed="true"][data-v="keep"]{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.vote button[aria-pressed="true"][data-v="tweak"]{background:var(--tweak-soft);color:var(--tweak);border-color:var(--tweak)}
+.vote button[aria-pressed="true"][data-v="skip"]{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.fb-note{width:100%;margin-top:8px;border-radius:10px;border:1.5px solid var(--rule);background:var(--field);padding:8px 10px;font-size:15px;resize:vertical;min-height:40px}
+.left{margin:6px 0 0;padding-left:20px;color:var(--muted);font-size:14.5px}
+.left li{padding:3px 0}
+.jump{margin:6px 0 4px}
+.jump .eyebrow{display:block;margin-bottom:8px}
+
+/* ---------- Screen changes (GymBuddy's router.js): forward slides in from the right, back from the left ---------- */
+::view-transition{pointer-events:none}
+::view-transition-old(root){animation:vt-out calc(120ms * var(--slow)) ease-out both}
+::view-transition-new(root){animation:vt-in var(--enter-ms) var(--enter) calc(40ms * var(--slow)) both,vt-settle var(--surface-ms) var(--surface) both}
+html[data-nav="forward"]::view-transition-old(root){animation:vt-out calc(120ms * var(--slow)) ease-out both,vt-to-left var(--exit-ms) var(--exit) both}
+html[data-nav="forward"]::view-transition-new(root){animation:vt-in var(--enter-ms) var(--enter) calc(40ms * var(--slow)) both,vt-from-right var(--surface-ms) var(--surface) both}
+html[data-nav="back"]::view-transition-old(root){animation:vt-out calc(120ms * var(--slow)) ease-out both,vt-to-right var(--exit-ms) var(--exit) both}
+html[data-nav="back"]::view-transition-new(root){animation:vt-in var(--enter-ms) var(--enter) calc(40ms * var(--slow)) both,vt-from-left var(--surface-ms) var(--surface) both}
+html[data-nav="morph"]::view-transition-new(root){animation:vt-in var(--enter-ms) var(--enter) calc(60ms * var(--slow)) both}
+::view-transition-group(receipt-pic){animation-duration:var(--surface-ms);animation-timing-function:var(--surface)}
+/* The header, the switch and the dock hold still and change in place. */
+::view-transition-group(top),::view-transition-group(seg),::view-transition-group(dock),::view-transition-group(proto),::view-transition-group(toasts){animation:none}
+::view-transition-old(top),::view-transition-old(seg),::view-transition-old(dock),::view-transition-old(proto),::view-transition-old(toasts){animation:none;opacity:0}
+::view-transition-new(top),::view-transition-new(seg),::view-transition-new(dock),::view-transition-new(proto),::view-transition-new(toasts){animation:none}
+::view-transition-old(dock):only-child{opacity:1;animation:dock-out var(--exit-ms) var(--exit) both}
+::view-transition-old(seg):only-child{opacity:1;animation:vt-out calc(120ms * var(--slow)) ease-out both}
+::view-transition-new(seg):only-child{animation:vt-in var(--enter-ms) var(--enter) both}
+
+@keyframes vt-out{to{opacity:0}}
+@keyframes vt-in{from{opacity:0}}
+@keyframes vt-settle{from{transform:translateY(14px)}}
+@keyframes vt-from-right{from{transform:translateX(16%)}}
+@keyframes vt-from-left{from{transform:translateX(-16%)}}
+@keyframes vt-to-left{to{transform:translateX(-6%)}}
+@keyframes vt-to-right{to{transform:translateX(6%)}}
+@keyframes view-in{from{opacity:.3;transform:translateY(14px)}}
+@keyframes rise{from{transform:translateY(40px);opacity:.4}}
+@keyframes sink-out{to{transform:translateY(28px);opacity:0}}
+@keyframes pop{from{transform:scale(.4);opacity:0}}
+@keyframes hl-draw{from{background-size:0% .8em}}
+@keyframes hl-erase{from{background-size:100% .8em}}
+@keyframes dock-in{from{transform:translateY(calc(100% + 16px))}}
+@keyframes dock-out{to{transform:translateY(calc(100% + 16px))}}
+@keyframes remote{from{background-color:color-mix(in srgb,var(--rc,var(--me)) 22%,transparent)}to{background-color:transparent}}
+@keyframes read-in{from{opacity:0;transform:translateY(6px);filter:blur(4px)}}
+@keyframes roll-in{from{transform:translateY(calc(var(--dir) * .5em));opacity:0;filter:blur(2px)}}
+@keyframes roll-out{to{transform:translateY(calc(var(--dir) * -.5em));opacity:0;filter:blur(2px)}}
+@keyframes stamp-in{0%{transform:scale(2.3) rotate(-18deg);opacity:0}40%{opacity:1}100%{transform:scale(1) rotate(-8deg)}}
+@keyframes scan{to{top:calc(100% - 2px)}}
+/* ---------- Tab's current look (decided: keep today's cards, take only the motion) ---------- */
+:root{--ground:#E9ECF1;--paper:#FFFFFF;--field:#EEF0F4;--ink:#1B1D24;--muted:#5D6373;--rule:#D6DAE2;--warn:#B3261E;--warn-soft:#FBE7E5;--ok:#17703F;--ok-soft:#E1F2E8;--btn:#1B1D24;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ground:#15171C;--paper:#1F2229;--field:#282C34;--ink:#F1F2F5;--muted:#A2A8B6;--rule:#343844;--warn:#F2867C;--warn-soft:#3B1F1D;--ok:#5ACB8E;--ok-soft:#18322A;--btn:#F1F2F5;--btn-ink:#15171C}}
+:root[data-theme="dark"]{--ground:#15171C;--paper:#1F2229;--field:#282C34;--ink:#F1F2F5;--muted:#A2A8B6;--rule:#343844;--warn:#F2867C;--warn-soft:#3B1F1D;--ok:#5ACB8E;--ok-soft:#18322A;--btn:#F1F2F5;--btn-ink:#15171C}
+h1{font-size:28px;letter-spacing:-.02em}
+.brand span{font-family:var(--ui)}
+.eyebrow{font-family:var(--ui);font-size:13.5px;font-weight:400;letter-spacing:0;text-transform:none}
+.lead,.r-head,.r-foot,.pic,.stub::before,.receipt::before,.receipt::after{display:none}
+.receipt{background:none;margin:12px 0 0;padding:0}
+.sect{font-family:var(--ui);font-size:15px;font-weight:400;letter-spacing:.04em;padding:20px 4px 8px}
+.sect::after{display:none}
+.count{font-family:var(--ui);font-weight:800}
+.line{background:var(--paper);border:1px solid var(--rule);border-top-width:0;min-height:60px}
+.sect + .line{border-top-width:1px;border-radius:16px 16px 0 0}
+.line:has(+ .sect),.line:has(+ .r-foot){border-radius:0 0 16px 16px}
+.sect + .line:has(+ .sect),.sect + .line:has(+ .r-foot){border-radius:16px}
+.l-top{justify-content:space-between;gap:12px}
+.l-name{font-weight:650;font-size:16px}
+.price,.qty{font-family:var(--ui)}
+.hl{background:none;padding:0;margin:0}
+.line.mine{background:color-mix(in srgb,var(--me) 9%,var(--paper));box-shadow:inset 4px 0 0 var(--me)}
+.once-draw{animation:mine-in var(--slide-ms) var(--slide) both}
+.once-erase{animation:mine-out var(--exit-ms) var(--exit) both}
+@keyframes mine-in{from{background-color:var(--paper);box-shadow:inset 0 0 0 var(--me)}}
+@keyframes mine-out{from{background-color:color-mix(in srgb,var(--me) 9%,var(--paper));box-shadow:inset 4px 0 0 var(--me)}}
+.slot.mine{box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--pc)}
+.yours{font-family:var(--ui)}
+.card,.name-btn,.chip-btn{border:1px solid var(--rule);box-shadow:none}
+.big,.pc-total,.dock-sum strong{font-family:var(--ui);font-weight:800;letter-spacing:-.01em}
+.mini,.lines,.read{font-family:var(--ui)}
+.mini li,.lines li,.read li,.lr{justify-content:space-between;gap:12px}
+.lines li{border-bottom:1px dotted var(--rule)}
+.lines li.tot{border-bottom:0;font-weight:800}
+.stamp,.stamp.sm{font-family:var(--ui);font-size:13px;font-weight:700;letter-spacing:0;text-transform:none;border:0;border-radius:999px;padding:2px 9px;background:var(--ok-soft);transform:none}
+.stamp.once-stamp{animation:pop var(--pop-ms) var(--pop) both}
+.dock{filter:none}
+.stub{border-top:1px solid var(--rule)}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--rule);border-top-color:var(--me);animation:sp calc(1s * var(--slow)) linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* Motion off (the prototype's switch) or Reduce Motion: everything lands at once, like Tab today. */
+html[data-still] *,html[data-still] *::before,html[data-still] *::after{animation:none!important;transition:none!important}
+</style>
+
+<div class="proto"><div class="proto-in">
+  <b>Prototype</b>
+  <button type="button" class="pt" id="pMotion" aria-pressed="true">Motion</button>
+  <button type="button" class="pt" id="pSlow" aria-pressed="false">Slow ×4</button>
+  <button type="button" class="pt go" id="pNotes">Notes</button>
+</div></div>
+<header class="top"><div class="top-in">
+  <div class="brand"><strong id="title">Split a tab</strong><span id="subtitle"></span></div>
+  <button type="button" id="meBtn" class="chip-btn" hidden></button>
+</div></header>
+<main class="wrap" id="app"></main>
+<div class="dock" id="dock" hidden><div class="stub"><div class="dock-in" id="dockIn" aria-live="polite"></div></div></div>
+<div id="toasts"></div>
+<dialog id="sheet" class="sheet-dlg" aria-labelledby="sheetTitle">
+  <div class="sheet-wrap" id="sheetWrap">
+    <div class="scrim" id="scrim"></div>
+    <div class="sheet-panel" id="sheetPanel" tabindex="-1"><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div>
+  </div>
+</dialog>
+<dialog id="away" class="away" aria-labelledby="awayTitle"><div class="away-in">
+  <span class="eyebrow" style="color:inherit;opacity:.7">Prototype</span>
+  <h2 id="awayTitle">You’re in Venmo now</h2>
+  <p id="awayText"></p>
+  <button type="button" class="btn" data-act="venmo-back">Back to Tab</button>
+</div></dialog>
+
+<script>
+'use strict';
+/* =====================================================================
+   Motion: GymBuddy's lib/motion.js, without React.
+   Four damped springs named for what moves; big surfaces get the slower
+   spring, small things pop. Exits are quicker than entrances.
+   ===================================================================== */
+const P = { motion: true, slow: 1 };
+try { const s = JSON.parse(localStorage.getItem('tab-proto-p') || 'null'); if (s) Object.assign(P, s); } catch (e) { /* private mode */ }
+const SPRINGS = {
+  enter: { f: 3.6, z: 1, fb: 'cubic-bezier(.16, 1, .3, 1)' },     // content arriving
+  pop: { f: 3, z: 0.7, fb: 'cubic-bezier(.2, 1.5, .4, 1)' },      // checks, chips, stamps
+  slide: { f: 3.4, z: 0.78, fb: 'cubic-bezier(.3, 1.3, .5, 1)' }, // the pill, highlights
+  surface: { f: 1.9, z: 0.9, fb: 'cubic-bezier(.2, 1, .3, 1)' },  // screens, sheets, the dock
+};
+function spring(t, f, z) {
+  if (t <= 0) return 0;
+  const w = 2 * Math.PI * f;
+  if (z >= 1) return 1 - Math.exp(-w * t) * (1 + w * t);
+  const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * t) * (Math.cos(wd * t) + (z * w / wd) * Math.sin(wd * t));
+}
+function settleMs(f, z) { let last = 0; for (let ms = 0; ms <= 3000; ms++) if (Math.abs(1 - spring(ms / 1000, f, z)) >= 0.002) last = ms; return last + 1; }
+const linearOk = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)');
+const BASE = {}, EASE = {};
+for (const [n, { f, z, fb }] of Object.entries(SPRINGS)) {
+  const ms = settleMs(f, z), steps = Math.ceil(ms / 10);
+  BASE[n] = ms;
+  EASE[n] = linearOk ? `linear(${Array.from({ length: steps + 1 }, (_, i) => (i === steps ? 1 : +spring((i / steps) * ms / 1000, f, z).toFixed(4))).join(', ')})` : fb;
+}
+const EXIT_MS = 200, EXIT_EASE = 'cubic-bezier(.4, 0, 1, 1)';
+const sysReduced = matchMedia('(prefers-reduced-motion: reduce)');
+const still = () => !P.motion || sysReduced.matches;
+const dur = (n) => (still() ? 0 : Math.round((n === 'exit' ? EXIT_MS : BASE[n]) * P.slow));
+const ease = (n) => (n === 'exit' ? EXIT_EASE : EASE[n]);
+function installMotion() {
+  const s = document.documentElement.style;
+  for (const n of Object.keys(SPRINGS)) { s.setProperty(`--${n}`, EASE[n]); s.setProperty(`--${n}-ms`, dur(n) + 'ms'); }
+  s.setProperty('--exit', EXIT_EASE); s.setProperty('--exit-ms', dur('exit') + 'ms'); s.setProperty('--slow', String(P.slow));
+  document.documentElement.toggleAttribute('data-still', still());
+}
+if (sysReduced.addEventListener) sysReduced.addEventListener('change', installMotion);
+installMotion();
+function anim(el, frames, n, extra) { if (still() || !el || !el.animate) return null; return el.animate(frames, Object.assign({ duration: dur(n), easing: ease(n) }, extra)); }
+
+/** Folds an element away so what's below glides up (motion.js collapse()). */
+function collapse(el) {
+  if (!el || still() || !el.animate) return Promise.resolve();
+  const s = getComputedStyle(el);
+  const keep = { height: el.offsetHeight + 'px', paddingTop: s.paddingTop, paddingBottom: s.paddingBottom, marginTop: s.marginTop, marginBottom: s.marginBottom, opacity: s.opacity };
+  const gone = { height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 };
+  el.style.overflow = 'hidden';
+  return el.animate([keep, gone], { duration: dur('exit') + 40 * P.slow, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }).finished.catch(() => {});
+}
+/** The reverse: opens an element up from nothing. */
+function expand(el) {
+  if (!el || still() || !el.animate) return;
+  const s = getComputedStyle(el);
+  const full = { height: el.offsetHeight + 'px', paddingTop: s.paddingTop, paddingBottom: s.paddingBottom, marginTop: s.marginTop, marginBottom: s.marginBottom, opacity: 1 };
+  el.style.overflow = 'hidden';
+  el.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 }, full], { duration: dur('enter'), easing: ease('enter') })
+    .finished.catch(() => {}).then(() => { el.style.overflow = ''; });
+}
+
+/* Screen changes as view transitions, marked forward / back / morph on <html data-nav> (router.js).
+   Without view transitions the new screen settles in on its own. */
+let navTok = 0;
+function transition(kind, update, after) {
+  const root = document.documentElement;
+  if (still() || !document.startViewTransition) {
+    update();
+    if (!still()) settleIn(kind);
+    if (after) setTimeout(after, still() ? 0 : dur('surface') * 0.5);
+    return;
+  }
+  const tok = ++navTok;
+  root.dataset.nav = kind || 'fade';
+  let vt;
+  try { vt = document.startViewTransition(update); } catch (e) { update(); delete root.dataset.nav; if (after) after(); return; }
+  vt.finished.catch(() => {}).finally(() => { if (tok === navTok) delete root.dataset.nav; if (after) after(); });
+}
+function settleIn(kind) {
+  const from = kind === 'forward' ? 'translateX(16%)' : kind === 'back' ? 'translateX(-16%)' : 'translateY(14px)';
+  anim(app, [{ transform: from, opacity: 0.3 }, { transform: 'none', opacity: 1 }], 'surface');
+}
+
+/* =====================================================================
+   Rendering helpers. Tab re-renders with innerHTML; these keep that
+   style but update rows by key so animations survive a re-render and
+   rows can glide (FLIP) when they move.
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const app = $('#app');
+const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const fmt = (c) => '$' + (Math.round(c) / 100).toFixed(2);
+const num = (c) => (Math.round(c) / 100).toFixed(2);
+const norm = (h) => h.replace(/ once-[a-z]+/g, ''); // one-shot animation classes don't count as a change
+function fromHTML(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+/* One-shot classes come off once they've played, so moving the element later doesn't replay them. */
+function stripOnce(root) {
+  const els = [root, ...root.querySelectorAll('[class*="once-"]')].filter((e) => e.classList && [...e.classList].some((c) => c.startsWith('once-')));
+  if (!els.length) return;
+  setTimeout(() => els.forEach((e) => [...e.classList].filter((c) => c.startsWith('once-')).forEach((c) => e.classList.remove(c))), 1000 * P.slow + 120);
+}
+function setHTML(el, html) { const n = norm(html); if (el._n === n) return; el._n = n; el.innerHTML = html; stripOnce(el); }
+function patch(box, list, { flip = false } = {}) {
+  const before = flip && !still() ? rectsOf(box) : null;
+  const have = new Map();
+  for (const c of box.children) if (c.dataset.key) have.set(c.dataset.key, c);
+  const kept = new Set();
+  list.forEach(({ key, html }, i) => {
+    let el = have.get(key);
+    const n = norm(html);
+    if (!el || el._n !== n) { const fresh = fromHTML(html); fresh._n = n; if (el) el.replaceWith(fresh); el = fresh; stripOnce(el); }
+    kept.add(el);
+    if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+  });
+  [...box.children].forEach((c) => { if (!kept.has(c)) c.remove(); });
+  if (before) flipFrom(box, before);
+}
+function rectsOf(box) { const m = new Map(); for (const c of box.children) if (c.dataset.key) m.set(c.dataset.key, c.getBoundingClientRect().top); return m; }
+function flipFrom(box, before) {
+  for (const c of box.children) {
+    const k = c.dataset.key; if (!k) continue;
+    c.getAnimations().forEach((a) => { if (a.id === 'flip') a.cancel(); });
+    const top = c.getBoundingClientRect().top;
+    let a = null;
+    if (before.has(k)) { const dy = before.get(k) - top; if (Math.abs(dy) > 0.5) a = c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: dur('surface'), easing: ease('surface') }); }
+    else a = c.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: dur('enter'), easing: ease('enter') });
+    if (a) a.id = 'flip';
+  }
+}
+/* Rolling numbers (Roll.jsx): the digits that changed slide out one way while the new ones come in
+   from the other, up as the number grows. The same markup comes back until the value changes again,
+   so an unrelated re-render doesn't cut the roll short. */
+const rolls = new Map();
+function roll(id, text) {
+  text = String(text);
+  const r = rolls.get(id);
+  const plain = `<span class="roll">${esc(text)}</span>`;
+  if (!r || still()) { rolls.set(id, { text, html: plain, at: 0 }); return plain; }
+  if (r.text === text) return performance.now() - r.at < 900 * P.slow ? r.html : plain;
+  const prev = r.text, amount = (s) => Number(String(s).replace(/[^\d.]/g, '')) || 0;
+  const dir = amount(text) >= amount(prev) ? 1 : -1;
+  const at = (s, p) => s[s.length - 1 - p];
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const p = text.length - 1 - i, ch = text[i], old = at(prev, p);
+    out += old === ch ? `<span class="rd">${esc(ch)}</span>`
+      : `<span class="rd" style="--dir:${dir}"><span class="ri">${esc(ch)}</span>${old !== undefined ? `<span class="ro">${esc(old)}</span>` : ''}</span>`;
+  }
+  const html = `<span class="roll"><span class="sr">${esc(text)}</span><span aria-hidden="true">${out}</span></span>`;
+  rolls.set(id, { text, html, at: performance.now() });
+  return html;
+}
+function buzz() { try { navigator.vibrate && navigator.vibrate(6); } catch (e) { /* not on iPhone */ } }
+
+/* =====================================================================
+   The demo tab
+   ===================================================================== */
+const PALETTE = ['#2F5BD3', '#0E8A5C', '#C2410C', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#A16207', '#4338CA', '#0F766E', '#9D174D', '#475569'];
+const pc = (p) => PALETTE[((p && p.color) || 0) % PALETTE.length];
+const initial = (n) => (Array.from(String(n).trim())[0] || '?').toUpperCase();
+const av = (p, cls = '') => `<span class="av ${cls}" style="--pc:${pc(p)}" aria-hidden="true">${esc(initial(p.name))}</span>`;
+const CHECK = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const HOST = 'nick';
+const MERCHANT = { name: 'ARDO PIZZERIA', city: 'Milwaukee, WI', when: 'Fri Oct 17 · 9:42 PM', meta: 'Server Jess · Table 12 · Check 4417' };
+const ITEMS0 = [
+  { id: 'curds', name: 'Fried Cheese Curds', qty: 1, cents: 1200 },
+  { id: 'marg', name: 'Large Margherita', qty: 1, cents: 2200 },
+  { id: 'honey', name: 'Large Hot Honey', qty: 1, cents: 2400 },
+  { id: 'pesto', name: 'Large Sausage & Pesto', qty: 1, cents: 2500 },
+  { id: 'cider', name: 'Von Stiehl Cherry Cider', qty: 4, cents: 2800 },
+  { id: 'cow', name: 'New Glarus Spotted Cow', qty: 3, cents: 2100 },
+  { id: 'bloody', name: 'Bloody Mary', qty: 1, cents: 1100 },
+  { id: 'coke', name: 'Diet Coke', qty: 1, cents: 350 },
+];
+const PEOPLE0 = [
+  { id: 'nick', name: 'Nick', color: 0, host: true },
+  { id: 'anna', name: 'Anna', color: 1 },
+  { id: 'ben', name: 'Ben', color: 2 },
+  { id: 'haven', name: 'Haven', color: 3 },
+  { id: 'chris', name: 'Christina', color: 4 },
+];
+
+let T = null, me = null, isHost = false;
+let screen = 'join', view = 'items';
+let grouping = {};           // what the Items list shows for each item: 'needs' or 'claimed'
+const touched = new Map();   // item id -> { cls, k, who, at }: the last change, for its one-shot animation
+const stamped = new Map();   // person id -> when they paid, for the stamp
+const openCards = new Set();
+let timers = [], regroupT = null, lastTap = 0, lastPct = null;
+
+function demoTab() {
+  T = { demo: true, title: 'Friday at Ardo', merchant: MERCHANT, charge: 18400, closed: false, pool: null, payer: { name: 'Nick', venmo: 'nick-demo' },
+    people: {}, order: [], items: ITEMS0.map((it) => Object.assign({}, it, { slots: Array.from({ length: it.qty }, () => []) })) };
+  PEOPLE0.forEach((p) => { T.people[p.id] = Object.assign({}, p); T.order.push(p.id); });
+  const set = (id, slots) => { T.items.find((x) => x.id === id).slots = slots; };
+  set('marg', [['nick']]); set('honey', [['ben', 'nick']]); set('bloody', [['chris']]);
+  set('cider', [['haven'], [], [], []]); set('cow', [['ben'], [], []]);
+  const C = compute();
+  T.people.chris.paid = C.by.chris.total; T.people.chris.ok = true;
+  return T;
+}
+
+function compute() {
+  const sub = T.items.reduce((s, it) => s + it.cents, 0) || 1;
+  const extras = T.charge - sub;
+  const by = {}, info = {}, openItems = [];
+  for (const id of T.order) by[id] = { id, p: T.people[id], items: 0, lines: [] };
+  let poolItems = 0;
+  for (const it of T.items) {
+    const unit = it.cents / it.qty, share = {}, holders = [];
+    let left = 0;
+    for (const sl of it.slots) {
+      if (!sl.length) { left++; continue; }
+      for (const p of sl) { share[p] = (share[p] || 0) + unit / sl.length; if (!holders.includes(p)) holders.push(p); }
+    }
+    info[it.id] = { left, share, holders, unit };
+    if (left) { poolItems += left * unit; openItems.push(it); }
+    for (const [p, amt] of Object.entries(share)) {
+      if (!by[p]) continue;
+      const n = it.slots.filter((sl) => sl.includes(p)).length;
+      const shared = it.slots.some((sl) => sl.includes(p) && sl.length > 1);
+      by[p].items += amt;
+      by[p].lines.push({ label: (n > 1 ? `${n} × ` : '') + it.name + (shared ? ' (shared)' : ''), amt });
+    }
+  }
+  const pool = Math.round(poolItems + (extras * poolItems) / sub);
+  for (const r of Object.values(by)) {
+    r.extras = Math.round((extras * r.items) / sub);
+    r.total = Math.round(r.items) + r.extras;
+  }
+  const others = T.order.filter((id) => id !== HOST);
+  if (T.pool === 'spread' && pool > 0) {
+    const unpaid = others.filter((id) => T.people[id].paid == null && by[id].total > 0);
+    const each = unpaid.length ? Math.round(pool / unpaid.length) : 0;
+    unpaid.forEach((id) => { by[id].total += each; by[id].lines.push({ label: 'Share of unclaimed items', amt: each }); });
+  }
+  for (const r of Object.values(by)) {
+    r.paid = r.p.paid || 0;
+    r.owed = Math.max(0, r.total - r.paid);
+    r.settled = r.p.paid != null && r.owed <= 1;
+  }
+  const expected = Math.max(0, T.charge - (by[HOST] ? by[HOST].total : 0));
+  const collected = others.reduce((s, id) => s + (by[id].paid || 0), 0);
+  return { by, info, openItems, pool, sub, extras, expected, collected };
+}
+const nameOf = (p) => (T.people[p] ? T.people[p].name : 'Someone');
+const shortName = (p) => (p === me ? 'You' : nameOf(p));
+const fresh = (id) => { const t = touched.get(id); return t && performance.now() - t.at < 900 * P.slow ? t : null; };
+const stampFresh = (id) => { const t = stamped.get(id); return t && performance.now() - t < 900 * P.slow; };
+const claimedNow = (it, C) => C.info[it.id].left === 0;
+
+/* =====================================================================
+   Screens
+   ===================================================================== */
+function render() {
+  document.documentElement.style.setProperty('--me', me && T && T.people[me] ? pc(T.people[me]) : PALETTE[0]);
+  renderTop();
+  if (screen === 'start') renderStart();
+  else if (screen === 'review') renderReview();
+  else if (screen === 'setup') renderSetup();
+  else if (screen === 'join') renderJoin();
+  else renderTab();
+  renderDock();
+}
+/** Taps and live changes: update the tab in place, no screen change. */
+function update(flip = false) {
+  const C = compute();
+  renderTop();
+  if (screen === 'tab') { renderBanner(); if (view === 'items') renderItems(C, flip); else renderPeople(C, flip); }
+  renderDock(C);
+  if (sheet && LIVE_SHEETS.has(sheet.type) && dlg.open && !closing) renderSheet();
+}
+function go(next, kind, after) { transition(kind, () => { screen = next; render(); window.scrollTo(0, 0); }, after); }
+
+function renderTop() {
+  const inTab = (screen === 'join' || screen === 'tab') && T;
+  $('#title').textContent = inTab ? T.title : 'Split a tab';
+  $('#subtitle').textContent = inTab ? `${fmt(T.charge)} · paid by ${T.payer.name}${T.closed ? ' · closed' : ''}` : '';
+  const btn = $('#meBtn'), mp = inTab && me && T.people[me];
+  btn.hidden = !mp;
+  if (mp) setHTML(btn, `${av(mp)}<span class="nm">${esc(mp.name)}${isHost ? ' (host)' : ''}</span>`);
+}
+
+/* ---------- Starting a tab (host) ---------- */
+const freshSetup = () => ({ step: 'photo', title: 'Friday at Ardo', items: [], charge: '184.00', receipt: false, hostName: 'Nick', venmo: '@nick-demo', people: ['Anna', 'Ben', 'Haven', 'Christina'], mode: 'items', arrive: false, keyN: 0 });
+const S = freshSetup();
+function pic(big) {
+  const w = [88, 64, 92, 70, 84, 58, 76, 90];
+  return `<div class="pic${big ? ' big' : ''}" aria-hidden="true"><i class="c"></i>${w.map((x) => `<i style="width:${x}%"></i>`).join('')}<i class="t"></i>${big ? '<span class="scanline"></span>' : ''}</div>`;
+}
+function renderStart() {
+  app.dataset.screen = 'start';
+  if (S.step === 'scan') {
+    app.innerHTML = `<h1>Reading the receipt</h1><p class="lede" role="status"><span class="spin"></span>Checking each line against the subtotal.</p><ul class="read" id="readList"></ul>`;
+    return;
+  }
+  app.innerHTML = `<h1>Split a tab</h1>
+    <p class="lede">Snap the receipt. Everyone taps what they had and pays you back on Venmo, with tax and tip worked out.</p>
+    ${pic(false)}
+    <div class="stack"><button type="button" class="btn wide" data-act="photo">Take a photo of the receipt</button>
+    <button type="button" class="btn ghost wide" data-act="type">Type the items instead</button></div>
+    <p class="note">The photo is simulated in this prototype.</p>`;
+}
+const lineOf = (it) => ({ key: 'k' + (S.keyN++), name: it.name, qty: it.qty, price: num(it.cents) });
+function startScan() {
+  S.step = 'scan';
+  transition('morph', () => render());
+  const list = ITEMS0.map((it) => [it.qty > 1 ? `${it.name} ×${it.qty}` : it.name, num(it.cents)]);
+  let i = 0;
+  const step = () => {
+    if (screen !== 'start' || S.step !== 'scan') return;
+    const ul = $('#readList'); if (!ul) return;
+    if (i < list.length) {
+      ul.insertAdjacentHTML('beforeend', `<li class="once-read"><span>${esc(list[i][0])}</span><span class="lead"></span><span>${list[i][1]}</span></li>`);
+      i++; timers.push(setTimeout(step, 220 * P.slow));
+      return;
+    }
+    timers.push(setTimeout(() => {
+      if (screen !== 'start') return;
+      S.items = ITEMS0.map(lineOf); S.receipt = true; S.arrive = true; S.step = 'photo';
+      go('review', 'forward');
+    }, 700 * P.slow));
+  };
+  timers.push(setTimeout(step, 600 * P.slow));
+}
+const ieRow = (it) => `<div class="ie" data-k="${it.key}">
+  <input class="in" data-f="name" id="n-${it.key}" aria-label="Item name" value="${esc(it.name)}" maxlength="60" autocomplete="off">
+  <input class="in" data-f="qty" id="q-${it.key}" aria-label="Quantity" inputmode="numeric" value="${esc(it.qty)}">
+  <input class="in money" data-f="price" id="p-${it.key}" aria-label="Line total in dollars" inputmode="decimal" value="${esc(it.price)}" placeholder="0.00">
+  <button type="button" class="x" data-act="delline" data-k="${it.key}" aria-label="Remove ${esc(it.name || 'this line')}">×</button></div>`;
+const toCents = (v) => { const n = Number(String(v).replace(/[$,\s]/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+let lastStatus = '';
+function reviewStatus() {
+  const sum = S.items.reduce((s, it) => s + (toCents(it.price) || 0), 0), charge = toCents(S.charge);
+  let kind, html = '';
+  if (S.receipt) {
+    if (Math.abs(sum - 14650) < 1) { kind = 'ok'; html += `<p class="banner ok">The items add up to the receipt’s $146.50 subtotal.</p>`; }
+    else { kind = 'warn'; html += `<p class="banner warn">The items add up to ${fmt(sum)}, but the receipt says $146.50. Check the lines against the photo.</p>`; }
+  }
+  if (Number.isFinite(charge) && charge > sum) html += `<p class="note money">Tax, fees and tip: ${fmt(charge - sum)}, split by what each person had.</p>`;
+  if (kind && lastStatus && kind !== lastStatus) html = html.replace('class="banner ', 'class="banner once-pop ');
+  lastStatus = kind || '';
+  return html;
+}
+function renderReview() {
+  app.dataset.screen = 'review';
+  const arrive = S.arrive; S.arrive = false;
+  app.innerHTML = `<h1>Check the receipt</h1>
+    <p class="lede">${S.receipt ? 'Fix anything that doesn’t match the paper.' : 'Add each line from the receipt.'}</p>
+    <label class="f" for="tTitle">Name this tab</label>
+    <input id="tTitle" class="in" value="${esc(S.title)}" maxlength="60" autocomplete="off">
+    <h2 class="h2">Items</h2>
+    <div class="ie-head" aria-hidden="true"><span>Item</span><span>Qty</span><span>Line total</span><span></span></div>
+    <div class="items-edit${arrive ? ' cascade' : ''}" id="itemsEdit">${S.items.map(ieRow).join('')}</div>
+    <button type="button" class="link" data-act="addline">+ Add a line</button>
+    <label class="f" for="charge">What your card was charged, with tip</label>
+    <input id="charge" class="in money" inputmode="decimal" value="${esc(S.charge)}" placeholder="0.00" autocomplete="off">
+    <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
+    <div class="sh-foot"><button type="button" class="btn wide" data-act="toPeople">Next: who was there</button>
+    <button type="button" class="btn ghost wide" data-act="restart">Start over</button></div>`;
+  stripOnce(app);
+}
+const chipsHtml = (freshName) => S.people.map((n) => `<span class="chip${n === freshName ? ' once-pop' : ''}" data-n="${esc(n)}">${esc(n)}<button type="button" data-act="delname" data-n="${esc(n)}" aria-label="Remove ${esc(n)}">×</button></span>`).join('');
+function renderSetup() {
+  app.dataset.screen = 'setup';
+  app.innerHTML = `<h1>Who was there?</h1>
+    <p class="lede">Add everyone now, including anyone who already left.</p>
+    <div class="row2">
+      <div><label class="f" for="hostName">Your name</label><input id="hostName" class="in" value="${esc(S.hostName)}" maxlength="24" autocomplete="given-name"></div>
+      <div><label class="f" for="venmo">Your Venmo username</label><input id="venmo" class="in" value="${esc(S.venmo)}" autocapitalize="off" autocorrect="off" maxlength="41"></div>
+    </div>
+    <label class="f" for="addName">Everyone else</label>
+    <form id="addForm" class="row2 tight" autocomplete="off"><input id="addName" class="in" placeholder="Name" maxlength="24" enterkeyhint="done"><button class="btn" type="submit">Add</button></form>
+    <div class="chips" id="chips">${chipsHtml()}</div>
+    <h2 class="h2">How to split</h2>
+    <label class="choice"><input type="radio" name="mode" value="items" ${S.mode === 'items' ? 'checked' : ''}><span><b>Everyone taps what they had</b><span>Best when people ordered different things.</span></span></label>
+    <label class="choice"><input type="radio" name="mode" value="even" ${S.mode === 'even' ? 'checked' : ''}><span><b>Split evenly, minus what people skipped</b><span>Best for big groups and shared plates.</span></span></label>
+    <div class="sh-foot"><button type="button" class="btn wide" data-act="create">Create the tab</button>
+    <button type="button" class="btn ghost wide" data-act="back">Back to the receipt</button></div>`;
+}
+function createTab() {
+  const items = S.items.filter((x) => x.name.trim()).map((x, i) => {
+    const qty = Math.max(1, parseInt(x.qty, 10) || 1), cents = Math.max(0, toCents(x.price) || 0);
+    return { id: 'n' + i, name: x.name.trim(), qty, cents, slots: Array.from({ length: qty }, () => []) };
+  });
+  if (!items.length) { toast('Add at least one item'); return; }
+  const sum = items.reduce((s, it) => s + it.cents, 0);
+  const charge = Math.max(sum, toCents(S.charge) || sum);
+  T = { demo: false, title: S.title.trim() || 'Tab', merchant: S.receipt ? MERCHANT : null, charge, closed: false, pool: null,
+    payer: { name: S.hostName.trim() || 'You', venmo: S.venmo.replace(/^@/, '') }, people: {}, order: [], items };
+  T.people[HOST] = { id: HOST, name: T.payer.name, color: 0, host: true }; T.order.push(HOST);
+  S.people.forEach((n, i) => { const id = 'p' + i; T.people[id] = { id, name: n, color: i + 1 }; T.order.push(id); });
+  me = HOST; isHost = true; view = 'people'; grouping = {}; openCards.clear(); lastPct = null;
+  go('tab', 'forward', () => openSheet({ type: 'created' }));
+}
+
+/* ---------- Joining (friends) ---------- */
+function renderJoin() {
+  app.dataset.screen = 'join';
+  const list = T.order.filter((id) => id !== HOST).map((id) => T.people[id]);
+  app.innerHTML = `<h1>Who are you?</h1>
+    <p class="lede">${esc(T.payer.name)} paid ${fmt(T.charge)}. Tap your name, then pick what you had.</p>
+    <div class="names">${list.map((p) => `<button type="button" class="name-btn" data-act="pick" data-p="${p.id}">${av(p, 'lg')}<span>${esc(p.name)}</span></button>`).join('')}</div>
+    <form id="joinForm" class="row2 tight" autocomplete="off"><label class="sr" for="joinName">Your name</label>
+      <input id="joinName" class="in" placeholder="Not listed? Type your name" maxlength="24" enterkeyhint="go" autocapitalize="words">
+      <button class="btn" type="submit">Join</button></form>`;
+}
+function pick(id) {
+  me = id; isHost = false; view = 'items';
+  regroup(false, true);
+  go('tab', 'forward');
+  toast(`Hi ${nameOf(id)}! Tap what you had.`);
+  if (T.demo) scheduleFriendEvents();
+}
+
+/* ---------- A tab ---------- */
+function renderTab() {
+  const C = compute();
+  if (app.dataset.screen !== 'tab') {
+    app.dataset.screen = 'tab';
+    app.innerHTML = `<div id="tabBanner"></div>
+      <div class="seg" id="seg" role="tablist" aria-label="View"><span class="seg-pill" aria-hidden="true"></span>
+      <button type="button" role="tab" data-act="view" data-v="people">People</button>
+      <button type="button" role="tab" data-act="view" data-v="items">Items</button></div>
+      <div id="view"></div>`;
+  }
+  const seg = $('#seg');
+  seg.style.setProperty('--i', view === 'items' ? 1 : 0);
+  seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.v === view)));
+  renderBanner();
+  if (view === 'items') renderItems(C, false); else renderPeople(C, false);
+}
+function renderBanner() {
+  const b = $('#tabBanner'); if (!b) return;
+  setHTML(b, T.closed ? '<p class="banner ok">This tab is closed. Thanks, everyone.</p>' : '');
+}
+
+/* Items. Rows you tick stay where they are until you next come to the list. */
+function renderItems(C, flip) {
+  const box = $('#view');
+  if (box.dataset.v !== 'items') { box.dataset.v = 'items'; box.innerHTML = '<p class="note" id="itemsNote"></p><div class="receipt" id="receipt"></div>'; }
+  setHTML($('#itemsNote'), T.closed ? 'The tab is closed, so items can’t change.' : 'Tap what you had. For a shared plate, tap its name to add everyone who shared it.');
+  patch($('#receipt'), itemsKeyed(C), { flip });
+}
+function itemsKeyed(C) {
+  const list = [{ key: 'head', html: receiptHead() }];
+  const shown = (it) => grouping[it.id] || (claimedNow(it, C) ? 'claimed' : 'needs');
+  const needs = T.items.filter((it) => shown(it) === 'needs'), claimed = T.items.filter((it) => shown(it) === 'claimed');
+  if (needs.length) {
+    list.push({ key: 'h-needs', html: `<div class="sect" data-key="h-needs"><span>Needs someone</span><span class="count warn">${roll('n-needs', needs.length)}</span></div>` });
+    needs.forEach((it) => list.push({ key: 'i-' + it.id, html: lineHtml(it, C) }));
+  }
+  if (claimed.length) {
+    list.push({ key: 'h-claimed', html: `<div class="sect" data-key="h-claimed"><span>Claimed</span><span class="count ok">${roll('n-claimed', claimed.length)}</span></div>` });
+    claimed.forEach((it) => list.push({ key: 'i-' + it.id, html: lineHtml(it, C) }));
+  }
+  list.push({ key: 'foot', html: receiptFoot(C) });
+  return list;
+}
+function receiptHead() {
+  const m = T.merchant;
+  return m ? `<div class="r-head" data-key="head"><b>${esc(m.name)}</b>${esc(m.city)}<br>${esc(m.when)}<br>${esc(m.meta)}</div>`
+    : `<div class="r-head" data-key="head"><b>${esc(T.title.toUpperCase())}</b>Typed in by ${esc(T.payer.name)}</div>`;
+}
+function receiptFoot(C) {
+  return `<div class="r-foot" data-key="foot">
+    <div class="lr"><span>Subtotal</span><span class="lead"></span><span>${num(C.sub)}</span></div>
+    <div class="lr"><span>Tax, fees &amp; tip</span><span class="lead"></span><span>${num(C.extras)}</span></div>
+    <div class="lr tot"><span>Card charged</span><span class="lead"></span><span>${num(T.charge)}</span></div>
+    <div class="thanks">THANK YOU</div></div>`;
+}
+function holderText(it) {
+  const groups = new Map();
+  for (const sl of it.slots) if (sl.length) { const k = sl.join('+'); groups.set(k, (groups.get(k) || 0) + 1); }
+  return [...groups].map(([k, n]) => {
+    const names = k.split('+').map(shortName);
+    const w = names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}` : names[0];
+    return n > 1 ? `${w} ×${n}` : w;
+  }).join(', ');
+}
+const dots = (ids) => `<span class="dots">${ids.slice(0, 3).map((id) => av(T.people[id])).join('')}</span>`;
+function lineHtml(it, C) {
+  const inf = C.info[it.id], multi = it.qty > 1, name = esc(it.name);
+  const mine = it.slots.some((sl) => sl.includes(me));
+  const f = fresh(it.id);
+  const once = f ? ` once-${f.cls}` : '';
+  const style = f && f.cls === 'remote' && T.people[f.who] ? ` style="--rc:${pc(T.people[f.who])}"` : '';
+  const meta = [];
+  if (!inf.holders.length) meta.push('<span class="warn">Unclaimed</span>');
+  else if (inf.left) meta.push(`<span class="warn">${inf.left} of ${it.qty} left</span>`);
+  const others = inf.holders.filter((p) => p !== me);
+  if (mine) meta.push(`<span class="yours">You ${fmt(inf.share[me])}</span>`);
+  if (others.length) meta.push(`<span class="who">${dots(others)}${mine ? 'with ' : ''}${esc(mine ? others.map(shortName).join(' & ') : holderText(it))}</span>`);
+  const price = multi ? `${num(inf.unit)}<small> ea</small>` : num(it.cents);
+  const main = `<button type="button" class="l-main" data-act="item" data-i="${it.id}" aria-label="${name}${multi ? `, ${it.qty} on the receipt` : ''}: who had it">
+    <span class="l-top"><span class="l-name"><span class="hl">${name}</span>${multi ? ` <span class="qty">×${it.qty}</span>` : ''}</span><span class="lead" aria-hidden="true"></span><span class="price">${price}</span></span>
+    <span class="l-meta">${meta.join('')}</span></button>`;
+  if (multi) return `<div class="line slotted${mine ? ' mine' : ''}${once}" data-key="i-${it.id}"${style}><div class="l-row">${main}</div>${slotsHtml(it, f)}</div>`;
+  const tick = T.closed ? '' : `<button type="button" class="tick" data-act="toggle" data-i="${it.id}" aria-pressed="${mine}" aria-label="I had ${name}">${CHECK}</button>`;
+  return `<div class="line${mine ? ' mine' : ''}${once}" data-key="i-${it.id}"${style}>${main}${tick}</div>`;
+}
+function slotFace(ps) {
+  if (!ps.length) return { face: '+', style: '' };
+  const cols = ps.map((p) => pc(T.people[p]));
+  const style = cols.length === 1 ? `--pc:${cols[0]}` : `background:linear-gradient(135deg,${cols[0]} 50%,${cols[1]} 50%)`;
+  const face = ps.length === 1 ? initial(nameOf(ps[0])) : ps.length === 2 ? ps.map((p) => initial(nameOf(p))).join('') : `${initial(nameOf(ps[0]))}+${ps.length - 1}`;
+  return { face: esc(face), style };
+}
+function slotsHtml(it, f) {
+  const name = esc(it.name);
+  return `<div class="slots" role="group" aria-label="${name}, one per drink">${it.slots.map((ps, k) => {
+    const n = `${name} ${k + 1} of ${it.qty}`;
+    const label = !ps.length ? `${n}: open, tap to take it` : ps.includes(me) ? `${n}: yours. Tap to give it back` : `${n}: ${esc(ps.map(shortName).join(' and '))}. Tap if you shared it`;
+    const cls = !ps.length ? 'slot open' : ps.includes(me) ? 'slot mine' : 'slot taken';
+    const pop = f && f.k === k && ps.length ? ' once-pop' : '';
+    const { face, style } = slotFace(ps);
+    return `<button type="button" class="${cls}${ps.length > 1 ? ' shared' : ''}${pop}"${style ? ` style="${style}"` : ''} data-act="slot" data-i="${it.id}" data-k="${k}" aria-label="${label}" ${T.closed ? 'disabled' : ''}>${face}</button>`;
+  }).join('')}</div>`;
+}
+/* Rows regroup only when you arrive at the list, so nothing ever moves under your thumb. */
+function regroup(flip = true, quiet = false) {
+  clearTimeout(regroupT);
+  const C = compute();
+  T.items.forEach((it) => { grouping[it.id] = claimedNow(it, C) ? 'claimed' : 'needs'; });
+  if (!quiet && screen === 'tab' && view === 'items') renderItems(C, flip);
+}
+function tapped() { lastTap = Date.now(); buzz(); }
+function toggleItem(id) {
+  const it = T.items.find((x) => x.id === id); if (!it || T.closed) return;
+  tapped();
+  const had = it.slots[0].includes(me);
+  it.slots[0] = had ? it.slots[0].filter((x) => x !== me) : [...it.slots[0], me];
+  touched.set(id, { cls: had ? 'erase' : 'draw', at: performance.now() });
+  update();
+}
+function changeSlot(it, k, fn) {
+  const before = it.slots.filter((s) => s.includes(me)).length;
+  fn();
+  const after = it.slots.filter((s) => s.includes(me)).length;
+  touched.set(it.id, { cls: !before && after ? 'draw' : before && !after ? 'erase' : 'bump', k, at: performance.now() });
+}
+function tapSlot(id, k) {
+  const it = T.items.find((x) => x.id === id); if (!it || T.closed) return;
+  const sl = it.slots[k];
+  if (sl.length && !sl.includes(me)) { openSheet({ type: 'item', i: id, k, ask: true }); return; }
+  tapped();
+  changeSlot(it, k, () => { it.slots[k] = sl.length ? sl.filter((x) => x !== me) : [me]; });
+  update();
+}
+
+/* People: who owes what. */
+function personStatus(r) {
+  const p = r.p;
+  if (p.id === HOST) return ['', `Paid the bill · own share ${fmt(r.total)}`];
+  if (r.settled) return ['done', p.ok ? 'Paid ✓' : `Paid ${fmt(r.paid)}`];
+  if (p.paid != null) return ['due', `Paid ${fmt(r.paid)}, owes ${fmt(r.owed)} more`];
+  if (!r.total) return ['due', 'No items yet'];
+  return ['due', `Owes ${fmt(r.owed)}`];
+}
+function personCard(r) {
+  const p = r.p, id = p.id, isMe = id === me, open = openCards.has(id);
+  const [cls, status] = personStatus(r);
+  const stamp = r.settled && id !== HOST ? `<span class="stamp sm${stampFresh(id) ? ' once-stamp' : ''}">Paid</span>` : '';
+  const lines = r.lines.length
+    ? `<ul class="mini">${r.lines.map((l) => `<li><span>${esc(l.label)}</span><span class="lead"></span><span>${num(l.amt)}</span></li>`).join('')}<li class="muted"><span>Tax, fees &amp; tip</span><span class="lead"></span><span>${num(r.extras)}</span></li></ul>`
+    : '<p class="note" style="margin:0">No items yet.</p>';
+  let acts = '';
+  if (!T.closed && isHost && id !== HOST) {
+    if (!r.settled && r.owed > 1) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${id}">Remind privately</button><button type="button" class="btn sm ghost" data-act="markpaid" data-p="${id}">Mark paid</button>`;
+    if (p.paid != null) acts += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${id}">Undo payment</button>`;
+    acts += `<button type="button" class="btn sm ghost" data-act="remove" data-p="${id}">Remove</button>`;
+  } else if (!T.closed && isMe && !isHost && r.owed > 1 && !r.settled) {
+    acts += '<button type="button" class="btn sm" data-act="mine">Review and pay</button>';
+  }
+  return `<div class="card pcard${open ? ' open' : ''}" data-key="p-${id}" data-p="${id}">
+    <button type="button" class="pc-head" data-act="pcard" data-p="${id}" aria-expanded="${open}">${av(p)}
+      <span class="p-name"><b>${isMe ? 'You' : esc(p.name)}${id === HOST && !isMe ? ' <span class="muted">(paid)</span>' : ''}</b><small class="${cls}">${esc(status)}</small></span>
+      ${stamp}<b class="pc-total">${num(r.total)}</b>${CHEV}</button>
+    <div class="pc-body"${open ? '' : ' hidden'}>${lines}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div>`;
+}
+function renderPeople(C, flip) {
+  const box = $('#view');
+  if (box.dataset.v !== 'people') { box.dataset.v = 'people'; box.innerHTML = '<div id="plist"></div>'; lastPct = null; }
+  const pct = C.expected ? Math.min(1, C.collected / C.expected) : 0;
+  const list = [{ key: 'sum', html: `<div class="card sum" data-key="sum"><span class="eyebrow">${isHost ? 'Paid back to you' : `Paid back to ${esc(T.payer.name)}`}</span>
+    <div class="sum-row"><b class="big">${roll('collected', fmt(C.collected))}</b><span class="muted money">of ${fmt(C.expected)}</span></div>
+    <div class="bar" aria-hidden="true"><i style="transform:scaleX(${pct.toFixed(4)})"></i></div></div>` }];
+  const n = C.openItems.length;
+  if (n && !T.pool) {
+    list.push({ key: 'attn', html: `<div class="card attn" data-key="attn"><h3>${n} ${n === 1 ? 'item needs' : 'items need'} someone · <span class="money">${fmt(C.pool)}</span></h3>
+      <p class="note" style="margin:0">${isHost ? 'Until it’s settled, this is on you.' : `Nobody has claimed these yet, so ${esc(T.payer.name)} is covering them for now.`}</p>
+      <ul class="mini open">${C.openItems.map((it) => { const left = C.info[it.id].left; return `<li><span>${esc(it.qty > 1 ? `${left} × ${it.name}` : it.name)}</span><span class="lead"></span><button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">${isHost ? 'Who had it?' : 'I had it'}</button></li>`; }).join('')}</ul>
+      ${isHost && !T.closed ? '<div class="acts"><button type="button" class="btn sm" data-act="pool" data-v="spread">Split across everyone who hasn’t paid</button><button type="button" class="btn sm ghost" data-act="pool" data-v="cover">I’ll cover it</button></div>' : ''}</div>` });
+  } else if (T.pool && n) {
+    list.push({ key: 'pool', html: `<p class="banner ok" data-key="pool" style="margin:0 0 10px">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : `${isHost ? 'You’re' : esc(T.payer.name) + ' is'} covering anything unclaimed.`}</p>` });
+  }
+  list.push({ key: 'h-people', html: `<div class="sect plain" data-key="h-people"><span>People</span><span class="count">${T.order.length}</span></div>` });
+  [HOST, ...T.order.filter((x) => x !== HOST)].forEach((id) => list.push({ key: 'p-' + id, html: personCard(C.by[id]) }));
+  if (isHost) list.push({ key: 'tabacts', html: `<div class="card" data-key="tabacts" style="margin-top:6px"><div class="acts flat"><button type="button" class="btn sm ghost" data-act="share">Share the link</button>${T.closed ? '<button type="button" class="btn sm ghost" data-act="reopen">Reopen</button>' : '<button type="button" class="btn sm ghost" data-act="close">Close the tab</button>'}</div></div>` });
+  patch($('#plist'), list, { flip });
+  const bar = $('#plist .sum .bar i');
+  if (bar && lastPct != null && Math.abs(lastPct - pct) > 0.001) anim(bar, [{ transform: `scaleX(${lastPct})` }, { transform: `scaleX(${pct})` }], 'surface');
+  lastPct = pct;
+}
+async function toggleCard(id) {
+  const card = $(`#plist [data-key="p-${id}"]`); if (!card) return;
+  const body = card.querySelector('.pc-body'), head = card.querySelector('.pc-head');
+  const opening = !openCards.has(id);
+  if (opening) openCards.add(id); else openCards.delete(id);
+  card.classList.toggle('open', opening); head.setAttribute('aria-expanded', String(opening));
+  card._n = norm(personCard(compute().by[id])); // the DOM already matches; don't rebuild the card
+  if (opening) {
+    body.hidden = false;
+    if (still()) return;
+    const h = body.offsetHeight; body.style.overflow = 'hidden';
+    body.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: dur('enter'), easing: ease('enter') }).finished.catch(() => {}).then(() => { body.style.overflow = ''; });
+  } else {
+    if (!still()) { const h = body.offsetHeight; body.style.overflow = 'hidden'; await body.animate([{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: dur('exit'), easing: EXIT_EASE }).finished.catch(() => {}); body.style.overflow = ''; }
+    if (!openCards.has(id)) body.hidden = true;
+  }
+}
+function setView(v) {
+  if (v === view) return;
+  if (v === 'items') regroup(false, true);
+  transition(v === 'items' ? 'forward' : 'back', () => { view = v; renderTab(); renderDock(); window.scrollTo(0, 0); });
+}
+
+/* ---------- The tear-off total ---------- */
+const dock = $('#dock');
+function showDock(on) {
+  if (on && (dock.hidden || dock.classList.contains('leaving'))) {
+    dock.classList.remove('leaving'); dock.hidden = false; document.body.classList.add('has-dock');
+    if (!still()) { dock.classList.add('once-dockin'); stripOnce(dock); }
+  } else if (!on && !dock.hidden && !dock.classList.contains('leaving')) {
+    document.body.classList.remove('has-dock');
+    if (still()) { dock.hidden = true; return; }
+    dock.classList.add('leaving');
+    setTimeout(() => { if (dock.classList.contains('leaving')) { dock.hidden = true; dock.classList.remove('leaving'); } }, dur('exit'));
+  }
+}
+function renderDock(C) {
+  if (screen !== 'tab' || !T || !me || !T.people[me]) { showDock(false); return; }
+  C = C || compute();
+  showDock(true);
+  const r = C.by[me];
+  let left, right = '';
+  if (isHost) {
+    left = `<span class="eyebrow">Paid back to you</span><strong>${roll('dock', fmt(C.collected))}</strong><small class="money">of ${fmt(C.expected)}</small>`;
+    right = T.closed ? '' : '<button type="button" class="btn" data-act="share">Share link</button>';
+  } else if (r.settled) {
+    left = `<span class="eyebrow">You’re all set</span><strong>${roll('dock', fmt(r.total))}<span class="stamp${stampFresh(me) ? ' once-stamp' : ''}">Paid</span></strong><small>${r.p.ok ? `${esc(T.payer.name)} confirmed it` : `Marked as paid. ${esc(T.payer.name)} can see it.`}</small>`;
+    right = '<button type="button" class="btn ghost" data-act="mine">Details</button>';
+  } else if (!r.total) {
+    left = `<span class="eyebrow">Your total</span><strong>${roll('dock', '$0.00')}</strong><small>Tap what you had</small>`;
+  } else {
+    left = `<span class="eyebrow">${r.p.paid != null ? 'Still to pay' : 'Your total'}</span><strong>${roll('dock', fmt(r.owed))}</strong><small>Tax and tip included</small>`;
+    right = T.closed ? '' : '<button type="button" class="btn" data-act="mine">Review and pay</button>';
+  }
+  setHTML($('#dockIn'), `<div class="dock-sum">${left}</div>${right}`);
+}
+
+/* ---------- Things other people do (the live tab, arriving quietly) ---------- */
+function remote(itemId, who, fn) {
+  if (!T || screen !== 'tab') return;
+  const it = T.items.find((x) => x.id === itemId); if (!it) return;
+  fn(it);
+  touched.set(itemId, { cls: 'remote', who, at: performance.now() });
+  update(); // stays in its group until the list is opened again
+}
+function scheduleFriendEvents() {
+  const evs = [
+    { at: 7000, who: 'haven', fn: (it) => { const k = it.slots.findIndex((s) => !s.length); if (k >= 0) it.slots[k] = ['haven']; }, item: 'cow' },
+    { at: 15000, who: 'ben', fn: (it) => { if (!it.slots[0].includes('ben')) it.slots[0] = [...it.slots[0], 'ben']; }, item: 'curds' },
+  ];
+  evs.filter((e) => e.who !== me).forEach((e) => timers.push(setTimeout(() => { if (!isHost) remote(e.item, e.who, e.fn); }, e.at * P.slow)));
+}
+function scheduleHostEvents() {
+  timers.push(setTimeout(() => {
+    if (!T || !T.demo || !isHost || screen !== 'tab') return;
+    const r = compute().by.ben;
+    if (!r || r.settled || !r.total) return;
+    T.people.ben.paid = r.total; stamped.set('ben', performance.now());
+    update(true);
+    toast(`Ben paid you ${fmt(r.total)}`);
+  }, 5000 * P.slow));
+}
+
+/* =====================================================================
+   Sheets: GymBuddy's Sheet in plain JS. They rise from the edge on the
+   surface spring, follow a drag down, and slide away however they close.
+   ===================================================================== */
+const dlg = $('#sheet'), panel = $('#sheetPanel'), scrim = $('#scrim'), sheetBody = $('#sheetBody'), wrapEl = $('#sheetWrap');
+const LIVE_SHEETS = new Set(['item', 'mine']); // sheets that follow the tab while open; the rest hold what you type
+let sheet = null, closing = null;
+const vv = window.visualViewport;
+function fitSheet() { if (!vv) return; wrapEl.style.setProperty('--vv-top', vv.offsetTop + 'px'); wrapEl.style.setProperty('--vv-h', vv.height + 'px'); }
+if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll', fitSheet); }
+function openSheet(s) {
+  if (dlg.open && !closing) { sheet = s; swapSheet(); return; }
+  if (closing) { closing = null; panel.getAnimations().forEach((a) => a.cancel()); scrim.getAnimations().forEach((a) => a.cancel()); }
+  sheet = s;
+  sheetBody._n = null; renderSheet();
+  if (!dlg.open) dlg.showModal();
+  document.documentElement.classList.add('sheet-open');
+  fitSheet();
+  anim(panel, [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], 'surface');
+  anim(scrim, [{ opacity: 0 }, { opacity: 1 }], 'enter');
+  const field = sheetBody.querySelector('input.focus-me');
+  (field || panel).focus({ preventScroll: true });
+}
+function swapSheet() {
+  const h0 = panel.offsetHeight;
+  sheetBody._n = null; renderSheet(); sheetBody.scrollTop = 0;
+  if (still()) return;
+  const h1 = panel.offsetHeight;
+  if (Math.abs(h1 - h0) > 1) {
+    panel.style.overflow = 'hidden';
+    panel.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: dur('surface'), easing: ease('surface') }).finished.catch(() => {}).then(() => { panel.style.overflow = ''; });
+  }
+  anim(sheetBody, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], 'enter');
+}
+function closeSheet() {
+  if (!dlg.open || closing) return Promise.resolve();
+  const was = sheet; sheet = null;
+  const tok = closing = {};
+  const done = () => {
+    closing = null;
+    dlg.close();
+    sheetBody.innerHTML = ''; sheetBody._n = null;
+    document.documentElement.classList.remove('sheet-open');
+    document.body.appendChild($('#toasts'));
+    sheetClosed(was);
+  };
+  if (still()) { done(); return Promise.resolve(); }
+  const at = getComputedStyle(panel).transform;
+  const o = { duration: dur('exit') + 20 * P.slow, easing: EXIT_EASE, fill: 'forwards' };
+  const a = panel.animate([{ transform: at === 'none' ? 'translateY(0)' : at }, { transform: 'translateY(100%)' }], o);
+  scrim.animate([{ opacity: getComputedStyle(scrim).opacity }, { opacity: 0 }], o);
+  return a.finished.catch(() => {}).then(() => {
+    if (closing !== tok) return;
+    done();
+    panel.getAnimations().forEach((x) => x.cancel()); scrim.getAnimations().forEach((x) => x.cancel());
+    panel.style.transform = ''; scrim.style.opacity = '';
+  });
+}
+function sheetClosed(s) {
+  if (!s) return;
+  if (s.type === 'paycheck') payReturn = null;
+}
+dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
+scrim.addEventListener('click', () => closeSheet());
+
+/* Drag down to close: from the grab bar and header, or from the content when it's scrolled to the top.
+   Far (140 px or 35%) or fast (0.5 px/ms) closes from where the finger let go; otherwise it springs back. */
+(function dragToClose() {
+  const START = 8, FAR = 140, FLICK = 0.5;
+  let g = null;
+  const settle = () => {
+    const at = panel.style.transform;
+    panel.style.transform = ''; scrim.style.opacity = '';
+    if (at && !still()) panel.animate([{ transform: at }, { transform: 'translateY(0)' }], { duration: dur('surface'), easing: ease('surface') });
+  };
+  panel.addEventListener('touchstart', (e) => {
+    g = null;
+    if (e.touches.length !== 1 || closing) return;
+    const t = e.target;
+    if (t.closest('input, textarea, select')) return;
+    for (let el = t; el && el !== panel; el = el.parentElement) if (el.scrollTop > 0) return;
+    const p = e.touches[0];
+    g = { x: p.clientX, y: p.clientY, dy: 0, on: null, trail: [] };
+  }, { passive: true });
+  panel.addEventListener('touchmove', (e) => {
+    if (!g || g.on === false) return;
+    const p = e.touches[0];
+    if (g.on === null) {
+      const dx = p.clientX - g.x, dy = p.clientY - g.y;
+      if (Math.hypot(dx, dy) < START) return;
+      g.on = dy > 0 && dy > Math.abs(dx);
+      if (!g.on) return;
+      g.y += START;
+      panel.classList.add('dragging');
+    }
+    e.preventDefault();
+    g.dy = Math.max(0, p.clientY - g.y);
+    panel.style.transform = `translateY(${g.dy}px)`;
+    scrim.style.opacity = String(1 - Math.min(1, g.dy / panel.offsetHeight));
+    g.trail.push([p.clientY, e.timeStamp]); if (g.trail.length > 5) g.trail.shift();
+  }, { passive: false });
+  const end = (e) => {
+    const d = g; g = null;
+    if (!d || !d.on) return;
+    panel.classList.remove('dragging');
+    const a = d.trail[0], b = d.trail[d.trail.length - 1];
+    const speed = a && b && b[1] > a[1] ? (b[0] - a[0]) / (b[1] - a[1]) : 0;
+    if (e.type === 'touchend' && (d.dy > Math.min(FAR, panel.offsetHeight * 0.35) || (speed > FLICK && d.dy > 24))) closeSheet();
+    else settle();
+  };
+  panel.addEventListener('touchend', end);
+  panel.addEventListener('touchcancel', end);
+})();
+
+const closeBtn = (label = 'Done') => `<button type="button" class="btn ghost wide" data-act="close-sheet">${label}</button>`;
+function renderSheet() {
+  const s = sheet; if (!s) return;
+  setHTML(sheetBody, sheetHtml(s));
+}
+function sheetHtml(s) {
+  const C = T ? compute() : null;
+  if (s.type === 'item') {
+    const it = T.items.find((x) => x.id === s.i);
+    const order = [me, ...T.order.filter((id) => id !== me)];
+    const title = `<h2 id="sheetTitle">${esc(it.name)} <span class="muted money">${fmt(it.cents)}</span></h2>`;
+    if (it.qty < 2) {
+      const rows = order.map((pid) => {
+        const on = it.slots[0].includes(pid), popped = s.pop && s.pop.p === pid && performance.now() - s.pop.at < 600 * P.slow;
+        return `<div class="prow">${av(T.people[pid])}<span class="grow">${pid === me ? 'You' : esc(nameOf(pid))}</span><button type="button" class="tick${popped && on ? ' once-pop' : ''}" data-act="s-toggle" data-p="${pid}" aria-pressed="${on}" aria-label="${pid === me ? 'You' : esc(nameOf(pid))} had ${esc(it.name)}">${CHECK}</button></div>`;
+      }).join('');
+      return `<div class="sh">${title}<p class="sub">Tick everyone who had it. It’s split evenly between them.</p>${rows}<div class="sh-foot">${closeBtn()}</div></div>`;
+    }
+    const open = it.slots.filter((x) => !x.length).length;
+    const counts = order.map((pid) => {
+      const n = it.slots.filter((x) => x.includes(pid)).length, label = pid === me ? 'You' : esc(nameOf(pid));
+      return `<div class="prow">${av(T.people[pid])}<span class="grow">${label}</span><span class="step"><button type="button" data-act="s-dec" data-p="${pid}" aria-label="One fewer for ${label}" ${n ? '' : 'disabled'}>−</button><output>${roll('cnt-' + pid, n)}</output><button type="button" data-act="s-inc" data-p="${pid}" aria-label="One more for ${label}" ${open ? '' : 'disabled'}>+</button></span></div>`;
+    }).join('');
+    const sl = s.k != null ? it.slots[s.k] : null;
+    const ask = s.ask && sl && sl.length && !sl.includes(me)
+      ? `<div class="banner"><p style="margin:0 0 8px">Number ${s.k + 1} is ${esc(sl.map(shortName).join(' and '))}’s. Did you share it?</p><button type="button" class="btn sm" data-act="s-yes">Yes, I shared it</button></div>` : '';
+    return `<div class="sh">${title}<p class="sub">${it.qty} on the receipt at ${fmt(it.cents / it.qty)} each. ${open ? `${open} still open.` : 'All accounted for.'}</p>${ask}<h3 class="sheet-h">How many each person had</h3>${counts}<div class="sh-foot">${closeBtn()}</div></div>`;
+  }
+  if (s.type === 'mine') {
+    const r = C.by[me];
+    const lines = r.lines.length ? `<ul class="lines">${r.lines.map((l) => `<li><span>${esc(l.label)}</span><span class="lead"></span><span>${num(l.amt)}</span></li>`).join('')}
+      <li><span>Tax, fees &amp; tip</span><span class="lead"></span><span>${num(r.extras)}</span></li><li class="tot"><span>Total</span><span class="lead"></span><span>${num(r.total)}</span></li></ul>` : '<p class="note">Nothing claimed yet.</p>';
+    let pay = '';
+    if (!isHost && r.owed > 1 && !T.closed) pay = `<button type="button" class="btn wide" data-act="venmo">Pay ${fmt(r.owed)} on Venmo</button><button type="button" class="btn ghost wide" data-act="other">I paid another way</button>`;
+    if (!isHost && r.p.paid != null && !T.closed) pay += '<button type="button" class="link" data-act="unpay-me">Undo my payment</button>';
+    return `<div class="sh"><h2 id="sheetTitle">Your total <span class="money">${roll('mine-total', fmt(r.total))}</span>${r.settled ? `<span class="stamp">Paid</span>` : ''}</h2>
+      <p class="sub">Your items, plus your share of tax, fees and tip in proportion to what you had.</p>${lines}
+      ${r.p.paid != null ? `<p class="banner ${r.settled ? 'ok' : ''}">You’ve paid ${fmt(r.paid)}${r.owed > 1 ? `. ${fmt(r.owed)} left.` : '.'}</p>` : ''}
+      <div class="sh-foot">${pay}${closeBtn('Close')}</div></div>`;
+  }
+  if (s.type === 'paycheck') {
+    return `<div class="sh"><h2 id="sheetTitle">Did your Venmo go through?</h2><p class="sub">Mark it so ${esc(T.payer.name)} knows you’re square.</p>
+      <div class="sh-foot"><button type="button" class="btn wide" data-act="paidyes">Yes, I paid ${fmt(s.amt)}</button>${closeBtn('Not yet')}</div></div>`;
+  }
+  if (s.type === 'amount') {
+    const who = s.p || me, r = C.by[who];
+    return `<div class="sh"><h2 id="sheetTitle">${s.p ? `What did ${esc(nameOf(who))} pay?` : 'How much did you send?'}</h2>
+      <p class="sub">${s.p ? 'Put in what they actually paid you.' : 'Cash, Zelle, anything. Put in what you actually sent.'}</p>
+      <form id="amountForm"><label class="sr" for="amount">Amount in dollars</label>
+      <input id="amount" class="in money focus-me" inputmode="decimal" value="${num(Math.max(0, r.owed))}" autocomplete="off">
+      <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${closeBtn('Cancel')}</div></form></div>`;
+  }
+  if (s.type === 'created') {
+    return `<div class="sh"><h2 id="sheetTitle">Your tab is ready</h2><p class="sub">Send the link to the group chat. Everyone taps their name, picks what they had and pays you.</p>
+      <div class="sh-foot"><button type="button" class="btn wide" data-act="share">Send the link</button>${closeBtn('Later')}</div></div>`;
+  }
+  if (s.type === 'who') {
+    const p = T.people[me];
+    return `<div class="sh"><h2 id="sheetTitle">You’re ${esc(p.name)}${isHost ? ', the host' : ''}</h2><p class="sub">${isHost ? 'This phone manages the tab.' : 'Switch if this isn’t you.'}</p>
+      <div class="sh-foot">${isHost ? '' : `<button type="button" class="btn ghost wide" data-act="switch">I’m not ${esc(p.name)}</button>`}${closeBtn('Close')}</div></div>`;
+  }
+  if (s.type === 'confirm-close') {
+    return `<div class="sh"><h2 id="sheetTitle">Close the tab?</h2><p class="sub">Nobody can change their items after this. You can reopen it.</p>
+      <div class="row2" style="margin-top:16px"><button type="button" class="btn ghost" data-act="close-sheet">Cancel</button><button type="button" class="btn" data-act="close-yes">Close the tab</button></div></div>`;
+  }
+  if (s.type === 'notes') return notesHtml();
+  return '';
+}
+
+/* =====================================================================
+   Toast: a small pill that rises over the dock. Tap it or swipe it away;
+   Undo is plain text. Undo toasts stay 5 s, plain ones 2.6 s.
+   ===================================================================== */
+let toastEl = null, toastT = null;
+function toast(msg, opts = {}) {
+  const host = dlg.open && !closing ? dlg : document.body, root = $('#toasts');
+  if (root.parentNode !== host) host.appendChild(root);
+  if (toastEl) dismissToast(toastEl);
+  const el = document.createElement('div');
+  el.className = 'toast'; el.setAttribute('role', 'status');
+  el.innerHTML = `<span class="msg">${esc(msg)}</span>${opts.undo ? '<button type="button">Undo</button>' : ''}`;
+  root.appendChild(el); toastEl = el;
+  if (opts.undo) el.querySelector('button').addEventListener('click', () => { opts.undo(); dismissToast(el); });
+  wireToast(el);
+  clearTimeout(toastT); toastT = setTimeout(() => dismissToast(el), opts.undo ? 5000 : 2600);
+}
+function dismissToast(el, thrown) {
+  if (!el || el._gone) return;
+  el._gone = true;
+  if (toastEl === el) { toastEl = null; clearTimeout(toastT); }
+  if (still()) { el.remove(); return; }
+  if (!thrown) el.classList.add('leaving');
+  setTimeout(() => el.remove(), dur('exit') + 40);
+}
+function wireToast(el) {
+  let g = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    el.setPointerCapture(e.pointerId);
+    g = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, on: false };
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!g || g.id !== e.pointerId) return;
+    g.dx = e.clientX - g.x; g.dy = Math.max(0, e.clientY - g.y);
+    if (!g.on && Math.max(Math.abs(g.dx), g.dy) < 6) return;
+    if (!g.on) { g.on = true; el.style.animation = 'none'; el.style.transition = 'none'; }
+    el.style.transform = `translate(${g.dx}px, ${g.dy}px)`;
+    el.style.opacity = String(1 - Math.min(0.6, Math.max(Math.abs(g.dx), g.dy) / 200));
+  });
+  const up = (e) => {
+    if (!g || g.id !== e.pointerId) return;
+    const d = g; g = null;
+    if (!d.on) { if (e.type === 'pointerup') dismissToast(el); return; }
+    if (e.type === 'pointerup' && Math.max(Math.abs(d.dx), d.dy) > 44) {
+      const side = Math.abs(d.dx) > d.dy;
+      el.style.transition = still() ? 'none' : `transform ${dur('exit')}ms ${EXIT_EASE}, opacity ${dur('exit')}ms ${EXIT_EASE}`;
+      el.style.transform = side ? `translateX(${Math.sign(d.dx) * (el.offsetWidth + 40)}px)` : `translateY(${d.dy + 60}px)`;
+      el.style.opacity = '0';
+      dismissToast(el, true);
+    } else {
+      el.style.transition = `transform ${dur('slide')}ms ${EASE.slide}, opacity ${dur('slide')}ms ${EASE.slide}`;
+      el.style.transform = ''; el.style.opacity = '';
+    }
+  };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+}
+
+/* =====================================================================
+   Paying, and the host's actions
+   ===================================================================== */
+const away = $('#away');
+let payReturn = null, awayT = null;
+function goVenmo() {
+  const r = compute().by[me];
+  payReturn = { amt: r.owed };
+  $('#awayText').textContent = `Pretending you left to pay ${T.payer.name} ${fmt(r.owed)}. Tab will ask if it went through when you come back.`;
+  away.showModal();
+  anim(away, [{ opacity: 0 }, { opacity: 1 }], 'enter');
+  clearTimeout(awayT); awayT = setTimeout(backFromVenmo, 2600 * P.slow);
+}
+function backFromVenmo() {
+  clearTimeout(awayT);
+  if (!away.open) return;
+  const finish = () => { away.close(); if (payReturn) openSheet({ type: 'paycheck', amt: payReturn.amt }); };
+  const a = anim(away, [{ opacity: 1 }, { opacity: 0 }], 'exit', { fill: 'forwards' });
+  if (a) a.finished.catch(() => {}).then(() => { finish(); a.cancel(); }); else finish();
+}
+function markPaid(pid, amount, how) {
+  const p = T.people[pid], prev = { paid: p.paid, ok: p.ok };
+  p.paid = amount; p.ok = pid !== me; p.how = how; stamped.set(pid, -1e9);
+  closeSheet().then(() => {
+    stamped.set(pid, performance.now());
+    update(true);
+    const undo = () => { p.paid = prev.paid; p.ok = prev.ok; stamped.delete(pid); update(true); };
+    toast(pid === me ? 'Marked as paid. Thanks!' : `Marked ${nameOf(pid)} as paid`, { undo });
+  });
+}
+async function removePerson(pid) {
+  const el = $(`#plist [data-key="p-${pid}"]`);
+  const idx = T.order.indexOf(pid), slots = T.items.map((it) => it.slots.map((sl) => sl.slice())), name = nameOf(pid);
+  await collapse(el);
+  T.order = T.order.filter((x) => x !== pid);
+  T.items.forEach((it) => { it.slots = it.slots.map((sl) => sl.filter((x) => x !== pid)); });
+  openCards.delete(pid);
+  update();
+  toast(`Removed ${name}. Their items are unclaimed again.`, { undo: () => {
+    T.order.splice(idx, 0, pid);
+    T.items.forEach((it, i) => { it.slots = slots[i]; });
+    update(true);
+  } });
+}
+function setPool(v) {
+  const prev = T.pool; T.pool = v;
+  update(true);
+  toast(v === 'spread' ? 'Split across everyone who hasn’t paid' : 'You’re covering it', { undo: () => { T.pool = prev; update(true); } });
+}
+function closeTab(on) {
+  T.closed = on;
+  closeSheet().then(() => {
+    update(true);
+    if (on) expand($('#tabBanner .banner'));
+    toast(on ? 'Tab closed' : 'Tab reopened', on ? { undo: () => closeTab(false) } : {});
+  });
+}
+
+/* =====================================================================
+   Taps
+   ===================================================================== */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  const it = b.dataset.i && T ? T.items.find((x) => x.id === b.dataset.i) : null;
+  switch (a) {
+    /* starting a tab */
+    case 'photo': startScan(); break;
+    case 'type': S.items = [{ key: 'k' + S.keyN++, name: '', qty: 1, price: '' }, { key: 'k' + S.keyN++, name: '', qty: 1, price: '' }]; S.receipt = false; go('review', 'forward', () => { const f = $('.ie input'); if (f) f.focus(); }); break;
+    case 'addline': { const row = { key: 'k' + S.keyN++, name: '', qty: 1, price: '' }; S.items.push(row); renderReview(); const el = $(`.ie[data-k="${row.key}"]`); expand(el); el.querySelector('input').focus({ preventScroll: true }); break; }
+    case 'delline': delLine(b.dataset.k); break;
+    case 'toPeople': if (!S.items.some((x) => x.name.trim())) { toast('Add at least one item'); break; } go('setup', 'forward'); break;
+    case 'back': go('review', 'back'); break;
+    case 'restart': Object.assign(S, freshSetup()); go('start', 'back'); break;
+    case 'delname': delName(b.dataset.n); break;
+    case 'create': createTab(); break;
+    /* a tab */
+    case 'pick': pick(b.dataset.p); break;
+    case 'view': setView(b.dataset.v); break;
+    case 'toggle': toggleItem(b.dataset.i); break;
+    case 'slot': tapSlot(b.dataset.i, Number(b.dataset.k)); break;
+    case 'item': if (it) openSheet({ type: 'item', i: it.id }); break;
+    case 'mine': openSheet({ type: 'mine' }); break;
+    case 'pcard': toggleCard(b.dataset.p); break;
+    case 'assign': if (it) { if (view !== 'items') setTimeout(() => openSheet({ type: 'item', i: it.id }), still() ? 0 : dur('surface')); setView('items'); if (view === 'items' && still()) openSheet({ type: 'item', i: it.id }); } break;
+    case 'remind': toast('Reminder copied. Send it to them directly.'); break;
+    case 'markpaid': openSheet({ type: 'amount', p: b.dataset.p }); break;
+    case 'unpaid': { const pid = b.dataset.p, p = T.people[pid], prev = { paid: p.paid, ok: p.ok }; p.paid = null; p.ok = false; update(); toast('Payment undone', { undo: () => { Object.assign(p, prev); stamped.set(pid, performance.now()); update(); } }); break; }
+    case 'remove': removePerson(b.dataset.p); break;
+    case 'pool': setPool(b.dataset.v); break;
+    case 'share': toast('Link copied. Paste it in the group chat.'); if (sheet && sheet.type === 'created') closeSheet(); break;
+    case 'close': openSheet({ type: 'confirm-close' }); break;
+    case 'close-yes': closeTab(true); break;
+    case 'reopen': closeTab(false); break;
+    /* sheets */
+    case 'close-sheet': closeSheet(); break;
+    case 's-toggle': sheetToggle(b.dataset.p); break;
+    case 's-inc': case 's-dec': sheetStep(a, b.dataset.p); break;
+    case 's-yes': { const s = sheet, i2 = T.items.find((x) => x.id === s.i); tapped(); changeSlot(i2, s.k, () => { i2.slots[s.k] = [...i2.slots[s.k], me]; }); s.ask = false; update(); break; }
+    case 'venmo': goVenmo(); break;
+    case 'venmo-back': backFromVenmo(); break;
+    case 'paidyes': markPaid(me, sheet.amt, 'venmo'); payReturn = null; break;
+    case 'other': openSheet({ type: 'amount' }); break;
+    case 'unpay-me': { const p = T.people[me], prev = p.paid; p.paid = null; closeSheet().then(() => { update(); toast('Payment undone', { undo: () => { p.paid = prev; stamped.set(me, performance.now()); update(); } }); }); break; }
+    case 'switch': closeSheet().then(() => { me = null; timers.forEach(clearTimeout); timers = []; go('join', 'back'); }); break;
+    /* prototype notes */
+    case 'jump': jump(b.dataset.to); break;
+    case 'vote': vote(b); break;
+    case 'copyfb': copyFeedback(); break;
+  }
+});
+function sheetToggle(pid) {
+  const s = sheet, it = T.items.find((x) => x.id === s.i);
+  const had = it.slots[0].includes(pid);
+  it.slots[0] = had ? it.slots[0].filter((x) => x !== pid) : [...it.slots[0], pid];
+  if (pid === me) touched.set(it.id, { cls: had ? 'erase' : 'draw', at: performance.now() });
+  s.pop = { p: pid, at: performance.now() };
+  tapped(); update();
+}
+function sheetStep(a, pid) {
+  const it = T.items.find((x) => x.id === sheet.i);
+  const sl = it.slots;
+  if (a === 's-inc') {
+    const k = sl.findIndex((x) => !x.length);
+    if (k < 0) { toast(`All ${it.qty} are taken. Lower someone first.`); return; }
+    if (pid === me) changeSlot(it, k, () => { sl[k] = [pid]; }); else { sl[k] = [pid]; touched.set(it.id, { cls: 'bump', k, at: performance.now() }); }
+  } else {
+    let k = -1;
+    sl.forEach((x, n) => { if (x.length === 1 && x[0] === pid) k = n; });
+    if (k < 0) sl.forEach((x, n) => { if (x.includes(pid)) k = n; });
+    if (k < 0) return;
+    const go2 = () => { sl[k] = sl[k].filter((x) => x !== pid); };
+    if (pid === me) changeSlot(it, k, go2); else go2();
+  }
+  tapped(); update();
+}
+async function delLine(key) {
+  const row = $(`.ie[data-k="${key}"]`), idx = S.items.findIndex((x) => x.key === key);
+  if (idx < 0) return;
+  const item = S.items[idx];
+  await collapse(row);
+  S.items.splice(idx, 1);
+  renderReview();
+  toast(`Removed ${item.name || 'the line'}`, { undo: () => { S.items.splice(idx, 0, item); if (screen === 'review') { renderReview(); expand($(`.ie[data-k="${key}"]`)); } } });
+}
+async function delName(n) {
+  const chip = $(`.chip[data-n="${CSS.escape(n)}"]`);
+  const a = anim(chip, [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.6)', opacity: 0 }], 'exit', { fill: 'forwards' });
+  if (a) await a.finished.catch(() => {});
+  S.people = S.people.filter((x) => x !== n);
+  setHTML($('#chips'), chipsHtml());
+}
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (screen === 'review') {
+    const row = t.closest('.ie');
+    if (row) { const it = S.items.find((x) => x.key === row.dataset.k); if (it) it[t.dataset.f] = t.value; }
+    if (t.id === 'charge') S.charge = t.value;
+    if (t.id === 'tTitle') S.title = t.value;
+    if (row || t.id === 'charge') setHTML($('#reviewStatus'), reviewStatus());
+  }
+  if (screen === 'setup') {
+    if (t.id === 'hostName') S.hostName = t.value;
+    if (t.id === 'venmo') S.venmo = t.value;
+    if (t.name === 'mode') S.mode = t.value;
+  }
+  if (t.dataset.note) { FB.notes[t.dataset.note] = t.value; fbSave(); }
+});
+document.addEventListener('change', (e) => { if (e.target.name === 'mode') S.mode = e.target.value; });
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target;
+  if (f.id === 'addForm') {
+    const n = $('#addName').value.replace(/\s+/g, ' ').trim(); if (!n) return;
+    if (!S.people.some((x) => x.toLowerCase() === n.toLowerCase())) S.people.push(n);
+    setHTML($('#chips'), chipsHtml(n));
+    $('#addName').value = ''; $('#addName').focus();
+  }
+  if (f.id === 'joinForm') {
+    const n = $('#joinName').value.trim(); if (!n) return;
+    const id = 'j' + Date.now().toString(36);
+    T.people[id] = { id, name: n, color: T.order.length % PALETTE.length }; T.order.push(id);
+    pick(id);
+  }
+  if (f.id === 'amountForm') {
+    const c = toCents($('#amount').value);
+    if (!Number.isInteger(c) || c <= 0) { toast('Enter an amount'); return; }
+    markPaid(sheet.p || me, c, 'other');
+  }
+});
+$('#meBtn').addEventListener('click', () => openSheet({ type: 'who' }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && away.open) backFromVenmo(); });
+
+/* =====================================================================
+   Prototype controls, notes and feedback
+   ===================================================================== */
+const PATTERNS = [
+  { id: 'springs', n: '1', t: 'Four springs, quick exits', from: 'lib/motion.js', where: 'Everything. Turn Motion off in the bar at the top to feel Tab as it is today.' },
+  { id: 'screens', n: '2', t: 'Screens slide forward and back', from: 'router.js view transitions', where: 'Picking your name, People and Items, the new-tab steps.' },
+  { id: 'pill', n: '3', t: 'Sliding pill switch', from: 'the tab bar pill', where: 'People / Items at the top of a tab.' },
+  { id: 'sheets', n: '4', t: 'Sheets rise, drag down to close, slide away', from: 'ui.jsx Sheet', where: 'Tap an item’s name, Review and pay, I paid another way (watch the keyboard).' },
+  { id: 'roll', n: '5', t: 'Rolling numbers', from: 'Roll.jsx', where: 'Your total as you tick items, the paid-back total, group counts.' },
+  { id: 'press', n: '6', t: 'Press feedback on every control', from: 'the press feedback pass', where: 'Any button, row, tick or name.' },
+  { id: 'pop', n: '7', t: 'Checks and chips pop in', from: 'the pop spring', where: 'Ticks, the cider and Spotted Cow circles, names added during setup.' },
+  { id: 'toast', n: '8', t: 'Undo toasts you can swipe away', from: 'the quieter toast', where: 'Remove a person or a receipt line, mark paid, close the tab. Replaces the browser’s confirm pop-ups.' },
+  { id: 'glide', n: '9', t: 'Rows stay put; removed things fold away', from: 'collapse() and FLIP', where: 'Ticked rows stay in place until you come back to Items. Host view: Remove someone and the cards below glide up.' },
+  { id: 'confirm', n: '10', t: 'A sheet to confirm closing the tab', from: 'ConfirmSheet', where: 'Host view, then Close the tab.' },
+  { id: 'live', n: '11', t: 'Other people’s taps arrive quietly', from: 'the no pop-in rule', where: 'Wait on Items as a friend: Haven and Ben claim things, with no toast. Host view: Ben pays.' },
+];
+const OWN = [];
+const LEFT_OUT = [
+  'The receipt look, highlighter and PAID stamp. Decided: keep today’s cards.',
+  'Toasts when someone else claims an item. Decided: no.',
+  'Coaches and characters',
+  'GymBuddy’s chunky look: Lexend, thick drop lips, day colors',
+  'Help tap-through cards. Friends need to finish in under a minute.',
+  'Hold to edit. Nobody discovers it on a one-time visit.',
+  'Sounds. It’s a dinner table, and GymBuddy’s sound branch isn’t merged yet either.',
+  'A tab bar',
+];
+const VLABEL = { keep: 'Keep', tweak: 'Tweak', skip: 'Skip' };
+function notesHtml() {
+  const pat = (p) => `<li class="pat"><span class="num">${p.n}</span><div><b>${esc(p.t)}</b>${p.from ? `<span class="from">from ${esc(p.from)}</span>` : ''}<p>${esc(p.where)}</p>
+    <div class="vote" role="group" aria-label="${esc(p.t)}">${Object.keys(VLABEL).map((v) => `<button type="button" data-act="vote" data-id="${p.id}" data-v="${v}" aria-pressed="${FB.votes[p.id] === v}">${VLABEL[v]}</button>`).join('')}</div>
+    <label class="sr" for="note-${p.id}">Note on ${esc(p.t)}</label><textarea id="note-${p.id}" class="fb-note" data-note="${p.id}" rows="1" placeholder="Add a note">${esc(FB.notes[p.id] || '')}</textarea></div></li>`;
+  return `<div class="sh"><h2 id="sheetTitle">Prototype notes</h2>
+    <p class="sub">Try each idea, then mark it Keep, Tweak or Skip. Tap a mark again to clear it.</p>
+    <div class="jump"><span class="eyebrow">Jump to</span><div class="acts flat">
+      <button type="button" class="btn sm ghost" data-act="jump" data-to="friend">Join as a friend</button>
+      <button type="button" class="btn sm ghost" data-act="jump" data-to="host">Host view</button>
+      <button type="button" class="btn sm ghost" data-act="jump" data-to="start">Start a new tab</button></div></div>
+    <h3 class="sheet-h">Borrowed from GymBuddy</h3><ol class="pats">${PATTERNS.map(pat).join('')}</ol>
+        <h3 class="sheet-h">Left out on purpose</h3><ul class="left">${LEFT_OUT.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    <label class="f" for="note-general">Anything else</label>
+    <textarea id="note-general" class="fb-note" data-note="general" rows="3" placeholder="What felt off, what you want more of">${esc(FB.notes.general || '')}</textarea>
+    <p id="fbStatus" class="note">${fbStatusText()}</p>
+    <div class="sh-foot"><button type="button" class="btn wide" data-act="copyfb">Copy feedback</button>
+    <textarea id="fbCopy" class="in" hidden readonly aria-label="Feedback to copy"></textarea>${closeBtn('Done')}</div></div>`;
+}
+function jump(to) {
+  timers.forEach(clearTimeout); timers = []; clearTimeout(regroupT);
+  touched.clear(); stamped.clear(); openCards.clear(); rolls.clear(); lastPct = null;
+  closeSheet().then(() => {
+    if (to === 'start') { Object.assign(S, freshSetup()); T = null; me = null; isHost = false; go('start', 'back'); }
+    if (to === 'friend') { demoTab(); me = null; isHost = false; grouping = {}; go('join', 'back'); }
+    if (to === 'host') { demoTab(); me = HOST; isHost = true; view = 'people'; grouping = {}; regroup(false, true); go('tab', 'forward', scheduleHostEvents); }
+  });
+}
+function savePrefs() { try { localStorage.setItem('tab-proto-p', JSON.stringify(P)); } catch (e) { /* private mode */ } }
+function paintPrefs() { $('#pMotion').setAttribute('aria-pressed', String(P.motion)); $('#pSlow').setAttribute('aria-pressed', String(P.slow > 1)); }
+$('#pMotion').addEventListener('click', () => {
+  P.motion = !P.motion; savePrefs(); installMotion(); paintPrefs();
+  toast(P.motion ? 'Motion on' : 'Motion off: this is how Tab feels today');
+});
+$('#pSlow').addEventListener('click', () => { P.slow = P.slow > 1 ? 1 : 4; savePrefs(); installMotion(); paintPrefs(); toast(P.slow > 1 ? 'Slow motion: everything at a quarter speed' : 'Normal speed'); });
+$('#pNotes').addEventListener('click', () => openSheet({ type: 'notes' }));
+
+/* Feedback saves to the page's shared store (so Claude can read it back), and to this device as a fallback. */
+const FB = { votes: {}, notes: {} };
+let fbDoc = null, fbMode = 'local', fbWriting = false, fbAgain = false, fbT = null;
+try { const s = JSON.parse(localStorage.getItem('tab-proto-fb') || 'null'); if (s) { Object.assign(FB.votes, s.votes || {}); Object.assign(FB.notes, s.notes || {}); } } catch (e) { /* none */ }
+function fbStatusText() {
+  if (fbMode === 'shared') return 'Your marks and notes save to this page, so Claude can read them.';
+  if (fbMode === 'error') return 'Couldn’t save to the page just now. Copy feedback and paste it into the chat instead.';
+  return 'Your marks save on this device. Copy feedback and paste it into the chat to send them.';
+}
+function fbPaint() { const el = $('#fbStatus'); if (el) el.textContent = fbStatusText(); }
+function fbSave() {
+  try { localStorage.setItem('tab-proto-fb', JSON.stringify(FB)); } catch (e) { /* private mode */ }
+  if (!fbDoc) return;
+  clearTimeout(fbT); fbT = setTimeout(fbFlush, 700);
+}
+async function fbFlush() {
+  if (!fbDoc) return;
+  if (fbWriting) { fbAgain = true; return; }
+  fbWriting = true;
+  try { await fbDoc.set({ votes: Object.assign({}, FB.votes), notes: Object.assign({}, FB.notes), updatedAt: new Date().toISOString() }); fbMode = 'shared'; }
+  catch (e) { fbMode = 'error'; }
+  finally { fbWriting = false; fbPaint(); if (fbAgain) { fbAgain = false; fbFlush(); } }
+}
+async function fbConnect() {
+  const c = window.claude;
+  if (!c || !c.use) return;
+  try {
+    const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
+    if (!db || !user) return;
+    const id = await user.id();
+    if (!id) return;
+    const ref = db.doc('feedback/' + id);
+    const snap = await ref.get();
+    const hadLocal = Object.keys(FB.votes).length || Object.keys(FB.notes).length;
+    if (snap.exists) {
+      const d = snap.data() || {};
+      Object.assign(FB.votes, Object.assign({}, d.votes || {}, FB.votes));
+      Object.assign(FB.notes, Object.assign({}, d.notes || {}, FB.notes));
+    }
+    fbDoc = ref; fbMode = 'shared'; fbPaint();
+    if (hadLocal) fbSave();
+    if (sheet && sheet.type === 'notes') { sheetBody._n = null; renderSheet(); }
+  } catch (e) { fbMode = 'local'; fbPaint(); }
+}
+function vote(b) {
+  const id = b.dataset.id, v = b.dataset.v;
+  if (FB.votes[id] === v) delete FB.votes[id]; else FB.votes[id] = v;
+  b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(FB.votes[id] === x.dataset.v)));
+  fbSave();
+}
+function feedbackText() {
+  const lines = ['Tab prototype feedback'];
+  [...PATTERNS, ...OWN].forEach((p) => {
+    const v = FB.votes[p.id], n = (FB.notes[p.id] || '').trim();
+    if (v || n) lines.push(`${p.n}. ${p.t}: ${v ? VLABEL[v] : 'no mark'}${n ? `. ${n}` : ''}`);
+  });
+  if ((FB.notes.general || '').trim()) lines.push(`Anything else: ${FB.notes.general.trim()}`);
+  if (lines.length === 1) lines.push('No marks yet.');
+  return lines.join('\n');
+}
+function copyFeedback() {
+  const text = feedbackText();
+  const fallback = () => { const ta = $('#fbCopy'); if (!ta) return; ta.hidden = false; ta.value = text; ta.focus(); ta.select(); toast('Select all and copy it from the box'); };
+  try { navigator.clipboard.writeText(text).then(() => toast('Feedback copied. Paste it into the chat.'), fallback); } catch (e) { fallback(); }
+}
+
+/* =====================================================================
+   Start: the demo tab, at the screen a friend sees first
+   ===================================================================== */
+demoTab();
+paintPrefs();
+render();
+fbConnect();
+</script>
+</body></html>
