@@ -262,6 +262,24 @@ await test('a preview tab can be brought to the live site once, only with its ho
   assert.equal(res.status, 404);
 });
 
+await test('the host can offer Cash App, PayPal and Zelle as well as Venmo, and keep totals private', async () => {
+  const s = fakeStore();
+  const c = await post({ op: 'create', hostName: 'Nick', venmo: '@nick', cashapp: '$NickS', paypal: 'https://paypal.me/nicks/', zelle: '(555) 123-4567', items: WILD, charge: 18009, people: ['Anna'] }, s);
+  assert.equal(c.status, 200);
+  assert.deepEqual(c.state.payer, { name: 'Nick', venmo: 'nick', cashapp: 'NickS', paypal: 'nicks', zelle: '(555) 123-4567' });
+  assert.equal(c.state.private, false);
+  assert.equal((await post({ op: 'create', hostName: 'Nick', cashapp: '$123', items: WILD, charge: 18009 }, s)).status, 400, 'a cashtag needs a letter');
+  assert.equal((await post({ op: 'create', hostName: 'Nick', zelle: 'not an address', items: WILD, charge: 18009 }, s)).status, 400);
+  const a = Object.keys(c.state.people).find((p) => p !== HOST);
+  assert.equal((await post({ t: c.id, op: 'setup', private: true, actor: a }, s)).status, 403, 'only the host changes settings');
+  const r = await post({ t: c.id, op: 'setup', key: c.hostKey, private: true, zelle: 'nick@example.com', cashapp: '' }, s);
+  assert.equal(r.state.private, true);
+  assert.equal(r.state.payer.zelle, 'nick@example.com');
+  assert.equal(r.state.payer.cashapp, '');
+  await post({ t: c.id, op: 'paid', p: a, amount: 100, how: 'cashapp', actor: a }, s);
+  assert.equal(s.raw(keyFor(c.id)).log.at(-1).how, 'cashapp');
+});
+
 await test('apportion always adds up', async () => {
   assert.deepEqual(apportion(100, [1, 1, 1]), [34, 33, 33]);
   assert.deepEqual(apportion(5, [0, 0]), [3, 2]);
