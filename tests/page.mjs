@@ -120,6 +120,9 @@ await step('Nick claims his own items and adds Ben’s for him', async () => {
   assert.deepEqual(T.slots[iid('Large Hot Honey')], [[pid('Ben')]]);
   assert.equal(T.by[iid('Large Hot Honey')][pid('Ben')], HOST);
   assert.deepEqual(T.slots[iid('Bloody Mary')], [[HOST]]);
+  const rec = JSON.parse(nick.w.localStorage.getItem('tab-recent'));
+  assert.equal(rec[0].id, tabId, 'the start screen can list this tab under Your tabs');
+  assert.equal(rec[0].host, true);
 });
 
 await step('a drink several people had: + once per person in the item sheet', async () => {
@@ -154,6 +157,10 @@ await step('Anna sees the names Nick added and taps hers', async () => {
   assert.match(anna.text('#app'), /Who are you\?/);
   assert.match(anna.text('#app'), /Anna/);
   await anna.click(`[data-act="pick"][data-p="${pid('Anna')}"]`);
+  // everyone lands on People, with their own card first
+  assert.equal(anna.$('details.pc').dataset.p, pid('Anna'));
+  assert.match(anna.text('#app'), /Add my items/);
+  await anna.click('[data-act="editdone"]');
   assert.match(anna.text('#app'), /Tap what you had/);
 });
 await step('Anna claims her pizza and cider, and shares the curds with Nick', async () => {
@@ -218,8 +225,11 @@ await step('friends can open People and see everyone’s breakdown, without host
 // ---------- Ben opens his personal reminder link ----------
 const ben = await phone(`/t/${tabId}?p=${pid('Ben')}`);
 let benTotal;
-await step('Ben’s personal link opens straight to his items, marked as added by Nick', async () => {
+await step('Ben’s personal link opens People as Ben; his items are marked as added by Nick', async () => {
   assert.doesNotMatch(ben.text('#app'), /Who are you\?/);
+  assert.equal(ben.$('details.pc').dataset.p, pid('Ben'));
+  assert.match(ben.text('#app'), /Edit my items/);
+  await ben.click('[data-act="editdone"]');
   assert.match(ben.text('#app'), /Added by Nick/);
   benTotal = compute(raw()).byId[pid('Ben')].total;
 });
