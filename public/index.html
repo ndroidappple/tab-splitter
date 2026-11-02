@@ -7,6 +7,9 @@
 <meta name="description" content="Split a tab: everyone claims what they had and pays the payer back.">
 <meta name="theme-color" content="#E9ECF1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Tab">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
@@ -154,6 +157,7 @@ dialog.sheet::backdrop{background:rgba(8,10,14,.5)}
 .person-card{margin-bottom:0}
 .person-card.due{box-shadow:inset 4px 0 0 var(--warn)}
 .person-card.done{box-shadow:inset 4px 0 0 var(--ok)}
+.recent li a{color:var(--ink);font-weight:600;text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 0}
 .pc-head{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;min-height:44px;border-radius:10px}
 .pc-head::-webkit-details-marker{display:none}
 .chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.6;transition:transform .15s}
