@@ -217,8 +217,14 @@ async function scanPhoto(file) {
   S.busy = true; renderStart();
   try {
     const image = await shrink(file);
-    const r = await fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) });
-    const d = await r.json().catch(() => ({}));
+    // 503 means the server's AI key hasn't arrived yet (it can lag after the app sits idle), so wait and retry quietly.
+    let r, d;
+    for (let attempt = 0; ; attempt++) {
+      r = await fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) });
+      d = await r.json().catch(() => ({}));
+      if (r.status !== 503 || attempt >= 8) break; // about 40 seconds in all
+      await new Promise((res) => setTimeout(res, 5000));
+    }
     if (!r.ok) throw new Error(d.error || 'Couldn’t read that receipt. Try again, or type the items.');
     const rc = d.receipt || {};
     S.receipt = rc; S.check = d.check; S.scan = d.model;

@@ -332,6 +332,13 @@ await test('when both miss, the result comes back flagged for the host to fix', 
   assert.equal(r.check, 'flagged');
 });
 
+await test('with no AI key yet, nothing is sent and the page is told to retry', async () => {
+  const s = fakeStore();
+  const g = fakeGateway({ 'claude-haiku-5-5': goodReceipt });
+  await assert.rejects(readReceipt({ imageBase64: img, store: s, cap: 30, env: { ANTHROPIC_BASE_URL: 'https://gw.example' }, fetchImpl: g.fetchImpl }), (e) => e.status === 503);
+  assert.deepEqual(g.calls, [], 'the photo never leaves the function');
+});
+
 await test('the monthly cap counts simultaneous scans and then stops scanning', async () => {
   const s = fakeStore();
   const g = fakeGateway({ 'claude-haiku-5-5': goodReceipt });

@@ -52,6 +52,11 @@ export async function readReceipt({ imageBase64, mediaType, store, cap, now = Da
   let used = 0;
   for (const name of ['haiku', 'sonnet']) {
     const res = await scanReceipt({ imageBase64, mediaType, model: MODELS[name], env, fetchImpl });
+    if (res.noKey) {
+      // Not this receipt's fault: the AI key hasn't reached this function yet. The page waits and retries.
+      console.error('receipt scan: no AI key yet');
+      throw new HttpError(503, 'Receipt reading is warming up. Try again in a moment, or type the items.');
+    }
     used += res.credits || 0;
     const ok = !res.error && res.receipt && addsUp(res.receipt);
     tries.push({ model: name, ok, error: res.error, credits: res.credits, ms: res.ms, receipt: res.receipt });
