@@ -61,12 +61,21 @@ Names can wrap onto a second line, and a price can sit on the line above or belo
 If two receipts are in the photo, read only the one in front and flag the other.
 If anything is hidden or unreadable, use null and add a flag rather than guessing.`;
 
+// Netlify sometimes starts a function without the gateway's key for the first minute or so after it
+// has sat idle. Check its runtime store too, and don't send the photo anywhere without a key.
+function setting(env, name) {
+  const v = env[name] || (env === process.env && globalThis.Netlify && Netlify.env && Netlify.env.get(name));
+  return typeof v === 'string' ? v : '';
+}
+
 export async function scanReceipt({ imageBase64, mediaType = 'image/jpeg', model, env = process.env, fetchImpl = fetch }) {
-  const base = (env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/$/, '');
+  const key = setting(env, 'ANTHROPIC_API_KEY');
+  if (!key) return { error: 'no API key in this function yet', noKey: true, ms: 0 };
+  const base = (setting(env, 'ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/$/, '');
   const started = Date.now();
   const res = await fetchImpl(`${base}/v1/messages`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY || '', 'anthropic-version': '2023-06-01' },
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model,
       max_tokens: 4000,

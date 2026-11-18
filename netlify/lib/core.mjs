@@ -38,6 +38,31 @@ function cleanVenmo(v) {
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(s)) bad('Check the Venmo username');
   return s;
 }
+// Other ways to get paid back. Each is optional; friends see a button (or, for Zelle, the address to send to).
+function cleanCashtag(v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') bad('Check the Cash App $cashtag');
+  const s = v.trim().replace(/^\$/, '');
+  if (!/^[A-Za-z0-9_-]{1,20}$/.test(s) || !/[A-Za-z]/.test(s)) bad('Check the Cash App $cashtag');
+  return s;
+}
+function cleanPaypal(v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') bad('Check the PayPal.Me name');
+  const s = v.trim().replace(/^(https?:\/\/)?(www\.)?paypal\.me\//i, '').replace(/^@/, '').replace(/\/+$/, '');
+  if (!/^[A-Za-z0-9]{1,40}$/.test(s)) bad('Check the PayPal.Me name');
+  return s;
+}
+function cleanZelle(v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') bad('Check the Zelle email or phone');
+  const s = v.trim().slice(0, 80);
+  const digits = s.replace(/[\s().+-]/g, '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && !/^\d{10,11}$/.test(digits)) bad('Check the Zelle email or phone');
+  return s;
+}
+const PAY_FIELDS = { venmo: cleanVenmo, cashapp: cleanCashtag, paypal: cleanPaypal, zelle: cleanZelle };
+const HOW = new Set(['venmo', 'cashapp', 'paypal', 'zelle', 'other']);
 const cents = (v, what, max = 10000000) => {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0 || n > max) bad(`Check ${what}`);
@@ -119,13 +144,20 @@ export function createTab(body, now) {
     v: 2, id: newTabId(), rev: 1, created: now, closed: false,
     title: typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 60) : 'Tab',
     hostKeyHash: hash(hostKey),
-    payer: { name: cleanName(body.hostName || 'Host'), venmo: cleanVenmo(body.venmo) },
+    payer: { name: cleanName(body.hostName || 'Host'), ...Object.fromEntries(Object.entries(PAY_FIELDS).map(([k, f]) => [k, f(body[k])])) },
     mode: body.mode === 'even' ? 'even' : 'items',
+    private: body.private === true, // friends see only their own total, not everyone's
     items, charge,
     people: {}, claims: {}, out: {}, by: {}, modes: {}, pool: null, log: [],
     slots: Object.fromEntries(items.map((it) => [it.id, Array.from({ length: it.qty }, () => [])])),
   };
   T.people[HOST] = { name: T.payer.name, color: 0, t: 0, by: 'self', paid: null, lock: null, ok: false, waived: 0 };
+  // Setting up a tab for someone else who paid: the payer is HOST (everyone pays them back), and the
+  // person setting it up joins as a regular person who owes their share, holding the host controls.
+  if (typeof body.organizer === 'string' && body.organizer.trim()) {
+    const { id } = addPerson(T, cleanName(body.organizer), now, 'self');
+    if (id !== HOST) T.organizer = id;
+  }
   const names = Array.isArray(body.people) ? body.people.slice(0, MAX_PEOPLE - 1) : [];
   for (const n of names) if (typeof n === 'string' && n.trim()) addPerson(T, cleanName(n), now, HOST);
   log(T, now, 'created', {
@@ -178,7 +210,8 @@ function phoneEvent(T, body, now) {
 
 function change(T, body, now, isHost) {
   const actor = typeof body.actor === 'string' && T.people[body.actor] ? body.actor : undefined;
-  const by = isHost ? HOST : actor;
+  // The host phone acts as whoever is on it: the payer, or the person who set the tab up for them.
+  const by = actor || (isHost ? HOST : undefined);
   const device = cleanDevice(body.device);
   const host = () => { if (!isHost) forbid(); };
   const selfOrHost = (p) => { if (!isHost && actor !== p) forbid('You can only change your own payment'); };
@@ -267,7 +300,7 @@ function change(T, body, now, isHost) {
       if (person.lock == null) person.lock = summary(T).totals[body.p]; // their total stops moving once they pay
       person.paid = (person.paid || 0) + amount;
       if (isHost) person.ok = true;
-      log(T, now, 'paid', { person: body.p, amount, total: person.lock, how: body.how === 'other' ? 'other' : 'venmo', by });
+      log(T, now, 'paid', { person: body.p, amount, total: person.lock, how: HOW.has(body.how) ? body.how : 'venmo', by });
       return { changed: true };
     }
     case 'unpaid': {
@@ -304,6 +337,7 @@ function change(T, body, now, isHost) {
     case 'remove': {
       host(); needPerson(T, body.p);
       if (body.p === HOST) bad('The host can’t be removed');
+      if (body.p === T.organizer) bad('You set up this tab, so you can’t be removed');
       delete T.people[body.p];
       for (const map of [T.claims, T.out, T.by]) for (const i of Object.keys(map)) { delete map[i][body.p]; pruneItem(T, i); }
       for (const i of Object.keys(T.slots || {})) T.slots[i] = T.slots[i].map((x) => x.filter((q) => q !== body.p));
@@ -324,7 +358,7 @@ function change(T, body, now, isHost) {
     case 'setup': {
       // Host edits to the receipt or the tab's settings.
       host();
-      const fields = ['items', 'charge', 'title', 'venmo', 'mode', 'pool'].filter((k) => body[k] !== undefined);
+      const fields = ['items', 'charge', 'title', ...Object.keys(PAY_FIELDS), 'mode', 'pool', 'private'].filter((k) => body[k] !== undefined);
       if (!fields.length) bad('Nothing to change');
       if (body.items !== undefined) {
         T.items = cleanItems(body.items, T.items);
@@ -338,7 +372,8 @@ function change(T, body, now, isHost) {
         T.charge = c;
       }
       if (body.title !== undefined) T.title = String(body.title).trim().slice(0, 60) || 'Tab';
-      if (body.venmo !== undefined) T.payer.venmo = cleanVenmo(body.venmo);
+      for (const [k, f] of Object.entries(PAY_FIELDS)) if (body[k] !== undefined) T.payer[k] = f(body[k]);
+      if (body.private !== undefined) T.private = body.private === true;
       if (body.mode !== undefined) T.mode = body.mode === 'even' ? 'even' : 'items';
       if (body.pool !== undefined) T.pool = ['spread', 'cover'].includes(body.pool) ? body.pool : null;
       log(T, now, 'setup', { fields: fields.join(','), pool: body.pool === undefined ? undefined : T.pool });
@@ -438,7 +473,8 @@ export async function handle(req, store, now = () => Date.now(), previewStore = 
         if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);
         const cur = await read(store, body.t);
         if (!cur) throw new HttpError(404, NOT_FOUND);
-        return json({ isHost: typeof body.key === 'string' && hash(body.key) === cur.data.hostKeyHash });
+        const isHost = typeof body.key === 'string' && hash(body.key) === cur.data.hostKeyHash;
+        return json({ isHost, organizer: isHost ? cur.data.organizer : undefined });
       }
       if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);
       const { data, result } = await mutate(store, body.t, (T) => apply(T, body, now()));

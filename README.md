@@ -1,4 +1,4 @@
-# Tab
+# Splitty
 
 Split any tab in the same sitting. The person who paid snaps the receipt, everyone else opens a link,
 taps their name and claims what they had, and pays back on Venmo with one tap. Tax, fees and tip are
