@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Tab's mascot: a cheerful receipt who waves and brings the change. Rendered to public/icon-*.png. -->
+  <!-- Splitty, the app's mascot: a cheerful receipt who waves hello. Rendered to public/icon-*.png. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E7E9FC"/><stop offset="1" stop-color="#C9CFF6"/></linearGradient>
   </defs>
@@ -10,16 +10,13 @@
     <!-- waving arm -->
     <path d="M330 520 Q 270 500 250 430" fill="none"/>
     <circle cx="244" cy="408" r="40" fill="#FFFFFF"/>
-    <!-- arm holding the coin -->
-    <path d="M694 590 Q 740 610 770 600" fill="none"/>
+    <!-- other arm -->
+    <path d="M694 590 Q 740 610 768 598" fill="none"/>
     <!-- body -->
     <path d="M360 214 H660 Q700 214 700 254 V790 l-38 30 -38 -30 -38 30 -38 -30 -38 30 -38 -30 -38 30 -38 -30 -38 30 -38 -30 V254 Q320 214 360 214 Z" fill="#FFFFFF"/>
-    <!-- coin -->
-    <circle cx="810" cy="596" r="66" fill="#FFC83D"/>
+    <circle cx="790" cy="594" r="40" fill="#FFFFFF"/>
   </g>
   <g transform="rotate(-6 512 540)">
-    <circle cx="810" cy="596" r="42" fill="none" stroke="#E9A512" stroke-width="9"/>
-    <text x="810" y="626" text-anchor="middle" font-family="Inter, sans-serif" font-weight="900" font-size="86" fill="#262A63">$</text>
     <!-- face -->
     <ellipse cx="446" cy="380" rx="31" ry="40" fill="#262A63"/>
     <ellipse cx="580" cy="380" rx="31" ry="40" fill="#262A63"/>

@@ -170,9 +170,10 @@ function go(step, push = true) {
 const stepTag = (n) => `<p class="eyebrow">Step ${n} of 3</p>`;
 
 function renderStart() {
-  $('#title').textContent = 'Tab';
+  $('#title').textContent = 'Splitty';
   $('#subtitle').textContent = 'Split the bill';
   $('#meBtn').hidden = true;
+  $('#newBtn').hidden = true;
   $('#dock').hidden = true;
   if (S.step === 'review') return renderReview();
   if (S.step === 'people') return renderPeople();
@@ -574,6 +575,7 @@ function renderAll() {
   // Checks and highlights take the colour of whoever the taps are for.
   const target = mp ? T.people[who()] : null;
   document.documentElement.style.setProperty('--me', target ? pc(target) : PALETTE[0]);
+  $('#newBtn').hidden = false; // the only way out of a tab in the home-screen app, which has no address bar
   const btn = $('#meBtn');
   btn.hidden = !mp;
   if (mp) setHTML(btn, `${av(mp)}<span class="nm">${esc(mp.name)}${isHost ? ' · host' : ''}</span>`);
@@ -799,6 +801,7 @@ function peoplePanel(C) {
     ${owing && !T.closed ? row('remindall', 'Nudge the group', `${plural(owing, 'person owes', 'people owe')} ${payerYou('you')}`) : ''}
     ${row('settings', 'Tab settings', `Name, ways to pay ${payerYou('you')}, privacy`)}
     ${row('report', 'See the report')}
+    ${row('newtab', 'Start a new tab', 'This one stays in Your tabs')}
     ${/^deploy-preview-/.test(location.hostname) ? `<a class="list-row" href="${LIVE}/t/${tabId}#h=${encodeURIComponent(hostKey)}"><span class="grow"><b>Open on the live site</b></span>${CHEV}</a>` : ''}
     ${T.closed ? row('reopen', 'Reopen the tab') : row('close', 'Close the tab', allDone ? 'Everyone’s square' : 'Best once everyone has paid and nothing is left uncovered')}</div>`;
   return html;
@@ -1216,6 +1219,7 @@ app.addEventListener('click', (e) => {
   if (a === 'remove') removePerson(b.dataset.p);
   if (a === 'share') shareLink();
   if (a === 'settings') openSheet({ type: 'settings' });
+  if (a === 'newtab') { location.href = '/'; return; }
   if (a === 'report') window.open(`/api/report?t=${tabId}&key=${encodeURIComponent(hostKey)}`, '_blank', 'noopener');
   if (a === 'close') openSheet({ type: 'close' });
   if (a === 'reopen') act({ op: 'reopen' }, 'Tab reopened');

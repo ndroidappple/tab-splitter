@@ -1,6 +1,6 @@
 {
-  "name": "Tab Splitter",
-  "short_name": "Tab Splitter",
+  "name": "Splitty",
+  "short_name": "Splitty",
   "description": "Split the bill in a minute: snap the receipt, say who had what, and everyone pays back.",
   "start_url": "/",
   "scope": "/",

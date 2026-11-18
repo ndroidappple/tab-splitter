@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tab</title>
+<title>Splitty</title>
 <meta name="description" content="Split the bill in a minute: snap the receipt, say who had what, and everyone pays you back.">
 <meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
-<meta name="apple-mobile-web-app-title" content="Tab Splitter">
+<meta name="apple-mobile-web-app-title" content="Splitty">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <style>
 /* Tokens. One accent for actions; green means paid, amber means waiting on someone, red only means
@@ -52,8 +52,13 @@ button,a{-webkit-tap-highlight-color:transparent}
 .top-in{max-width:560px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:58px}
 .brand{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
 .brand strong{font-size:18px;font-weight:800;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.brand span{font-size:13.5px;color:var(--muted)}
+.brand span{font-size:13.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip-btn{display:inline-flex;align-items:center;gap:8px;max-width:50%;border:0;background:var(--card);box-shadow:var(--shadow);border-radius:999px;padding:4px 14px 4px 4px;min-height:40px;font-weight:650;font-size:14px;cursor:pointer}
+.new-btn{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px;text-decoration:none;white-space:nowrap}
+.new-btn span{font-size:19px;line-height:1;font-weight:600;margin-top:-2px}
+.new-btn[hidden]{display:none}
+.new-btn b{font-weight:inherit}
+@media (max-width:479px){.new-btn{width:40px;padding:0;justify-content:center}.new-btn span{font-size:24px}.new-btn b{display:none}}
 .chip-btn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .netbar{max-width:528px;margin:10px auto 0;padding:9px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:14px;font-weight:600;width:calc(100% - 32px)}
 .wrap{max-width:560px;margin:0 auto;padding:16px 16px 0}
@@ -325,7 +330,8 @@ dialog.sheet::backdrop{background:transparent}
 <body>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><strong id="title">Tab</strong><span id="subtitle" class="money"></span></div>
+    <div class="brand"><strong id="title">Splitty</strong><span id="subtitle" class="money"></span></div>
+    <a id="newBtn" class="new-btn" href="/" hidden aria-label="Start a new tab"><span aria-hidden="true">+</span><b>New tab</b></a>
     <button id="meBtn" class="chip-btn" type="button" hidden></button>
   </div>
 </header>
