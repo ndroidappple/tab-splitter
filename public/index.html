@@ -304,21 +304,24 @@ details.more-ways[open] > summary::before{content:'− '}
 .dock-sum small.warn-text{color:var(--pend);font-weight:650}
 .dock-sum strong{display:inline-block;transform-origin:left center}
 .dock-in > .btn.wide:only-child{flex:1}
-/* The one thing to do next (the dock's solid button, on every screen): a light circles the button's rim with a
-   soft halo behind it. GymBuddy's Week in review chip, in Splitty's coral. app.mjs syncs every glow
-   to one clock (--glow-t), so a re-rendered dock doesn't restart the spin. Reduce Motion holds it still. */
+/* The one thing to do next (the dock's solid button, on every screen): a soft light travels along the
+   button's own edge, with a warm bloom that follows it. No ring is drawn the rest of the way round, so it
+   reads as light on the edge, not a border. The gradient sits on the pseudo-elements themselves: that is
+   where --glow-a spins (a gradient built on the button would freeze at 0deg). app.mjs syncs every glow to
+   one clock (--glow-t), so a re-rendered dock doesn't restart it. Reduce Motion holds it still. */
 @property --glow-a{syntax:'<angle>';inherits:false;initial-value:0deg}
-.glow{position:relative;isolation:isolate;--glow-ring:conic-gradient(from var(--glow-a),var(--glow-tail) 0 55%,var(--glow-1) 72%,var(--glow-2) 84%,var(--glow-1) 94%,var(--glow-tail));
-  --glow-tail:color-mix(in srgb,var(--accent) 30%,transparent);--glow-1:#FF8A3D;--glow-2:#FFC24A}
-.glow::before,.glow::after{content:'';position:absolute;inset:-3px;border-radius:calc(16px + 3px);pointer-events:none;background:var(--glow-ring);animation:glow-spin 3.6s linear infinite;animation-delay:var(--glow-t,0ms)}
-.glow::before{z-index:1;padding:2.5px;
+.glow{position:relative;isolation:isolate;--glow-1:#FF9A4D;--glow-2:#FFD37A}
+.glow::before,.glow::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:conic-gradient(from var(--glow-a),transparent 0 52%,color-mix(in srgb,var(--glow-1) 55%,transparent) 68%,var(--glow-2) 80%,color-mix(in srgb,var(--glow-1) 55%,transparent) 90%,transparent 98%);
+  animation:glow-spin 3.2s linear infinite;animation-delay:var(--glow-t,0ms)}
+.glow::before{z-index:1;padding:1.5px;opacity:.9;
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
   mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
-.glow::after{z-index:-1;filter:blur(10px);opacity:.45;animation:glow-spin 3.6s linear infinite,glow-halo 3s ease-in-out infinite;animation-delay:var(--glow-t,0ms),0ms}
+.glow::after{z-index:-1;inset:-2px;filter:blur(9px);opacity:.7;animation:glow-spin 3.2s linear infinite,glow-halo 2.6s ease-in-out infinite;animation-delay:var(--glow-t,0ms),0ms}
 .glow:disabled::before,.glow:disabled::after{display:none}
 @keyframes glow-spin{to{--glow-a:360deg}}
-@keyframes glow-halo{50%{opacity:.2}}
-@media (prefers-color-scheme: dark){.glow{--glow-1:#FFB070;--glow-2:#FFE08A}.glow::after{opacity:.55}}
+@keyframes glow-halo{50%{opacity:.35}}
+@media (prefers-color-scheme: dark){.glow{--glow-1:#FFB27A;--glow-2:#FFE6A8}}
 
 /* Sheets rise from the bottom edge on the surface spring, follow a drag down, and slide away however
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */

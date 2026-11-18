@@ -863,7 +863,7 @@ function showDock(html, key, num) {
   // The dock's solid button is the next step on every screen, so it glows. Every glow spins on one clock,
   // so a dock rebuilt mid-spin picks up where the last one was.
   const g = $('#dockIn > .btn:not(.ghost)');
-  if (g && !g.classList.contains('glow')) { g.classList.add('glow'); g.style.setProperty('--glow-t', `${-(performance.now() % 3600)}ms`); }
+  if (g && !g.classList.contains('glow')) { g.classList.add('glow'); g.style.setProperty('--glow-t', `${-(performance.now() % 3200)}ms`); }
   const el = $('#dockIn .dock-sum strong');
   const was = dockKey === key ? dockNum : null;
   dockKey = key; dockNum = num;
