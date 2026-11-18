@@ -5,23 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Splitty</title>
 <meta name="description" content="Split the bill in a minute: snap the receipt, say who had what, and everyone pays you back.">
-<meta name="theme-color" content="#F1F0EB" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F3EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171311" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Splitty">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <style>
-/* Tokens. Colour guides the eye to two things: what you care about (the dark dock, the highest-contrast
-   surface on screen, holding your number) and what's next (the one solid accent button, in the dock).
-   Other actions are tinted, not solid. Green means done or matching, amber means waiting on someone,
-   red only means something is wrong. Person colours (avatars, checks, slots) come from app.mjs. */
+/* Tokens. Splitty lives at the end of a good meal, so it should feel like the table, not a bank:
+   warm cream paper, espresso ink, and one tomato-coral accent kept for what's next. The dock is the
+   bottom of a receipt (white paper, torn edge) holding the number you care about. Green means settled,
+   marigold means someone still has to act, deep red only means something is wrong.
+   Person colours (avatars, checks, slots) come from app.mjs. */
 :root{
-  --bg:#F1F0EB; --card:#FFFFFF; --field:#EFEDE7; --ink:#17181C; --muted:#696C74; --line:#E4E1DA; --line-2:#D4D0C7;
-  --accent:#4B57D1; --accent-ink:#FFFFFF; --accent-soft:#E9EBFB;
-  --ok:#15784A; --ok-soft:#E2F3EA; --pend:#A35400; --pend-soft:#FCEFDC; --warn:#C0352B; --warn-soft:#FBE6E3;
-  --me:#4B57D1;
-  --dock:#17181C; --dock-ink:#FFFFFF; --dock-muted:#A9ACB5; --dock-ok:#5FD39A; --dock-warn:#FFB45E; --dock-accent:#5D69F0; --dock-accent-ink:#FFFFFF;
+  --bg:#F7F3EC; --card:#FFFFFF; --field:#F1ECE3; --ink:#221D1A; --muted:#73675E; --line:#E8E1D6; --line-2:#D8CEBF;
+  --accent:#D2461F; --accent-ink:#FFFFFF; --accent-soft:#FCE6DD; --accent-text:#B83C19;
+  --ok:#1E7A4F; --ok-soft:#E1F2E8; --pend:#A85800; --pend-soft:#FCEFD9; --warn:#B42318; --warn-soft:#FDE7E4;
+  --me:#0F766E;
+  --paper:#FFFFFF; --dock-shadow:drop-shadow(0 -1px 1px rgba(80,50,20,.06)) drop-shadow(0 10px 28px rgba(80,50,20,.18));
   --shadow:0 1px 2px rgba(23,24,28,.05),0 4px 14px rgba(23,24,28,.05);
   --shadow-up:0 -1px 0 rgba(23,24,28,.04),0 8px 30px rgba(23,24,28,.12);
   --r:20px; --r-sm:14px;
@@ -32,16 +33,16 @@
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#111214; --card:#1B1C20; --field:#26272C; --ink:#F2F2F3; --muted:#A0A3AB; --line:#2C2E34; --line-2:#3A3C44;
-    --accent:#8F99FF; --accent-ink:#111214; --accent-soft:#252845;
-    --ok:#4FC98D; --ok-soft:#163026; --pend:#F2A94E; --pend-soft:#3A2A14; --warn:#FF8075; --warn-soft:#3D1E1B;
-    --dock:#2A2E5A; --dock-ink:#FFFFFF; --dock-muted:#BEC2E6; --dock-ok:#6FE0A6; --dock-warn:#FFC37A; --dock-accent:#8F99FF; --dock-accent-ink:#111214;
+    --bg:#171311; --card:#221C19; --field:#2D2622; --ink:#F5EFE8; --muted:#B3A79C; --line:#352C27; --line-2:#45392F;
+    --accent:#FF7A50; --accent-ink:#1A1310; --accent-soft:#3A231B; --accent-text:#FF9470;
+    --ok:#5ACB8F; --ok-soft:#163026; --pend:#F3B256; --pend-soft:#3A2A14; --warn:#FF8A7A; --warn-soft:#3D1E1B;
+    --paper:#2C2420; --dock-shadow:drop-shadow(0 10px 28px rgba(0,0,0,.55));
     --shadow:0 0 0 1px var(--line); --shadow-up:0 0 0 1px var(--line),0 8px 30px rgba(0,0,0,.5);
   }
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(140px + env(safe-area-inset-bottom))}
 button,input,select{font:inherit;color:inherit}
 button,a{-webkit-tap-highlight-color:transparent}
 :focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:2px}
@@ -58,7 +59,7 @@ button,a{-webkit-tap-highlight-color:transparent}
 .brand strong{font-size:18px;font-weight:800;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brand span{font-size:13.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip-btn{display:inline-flex;align-items:center;gap:8px;max-width:50%;border:0;background:var(--card);box-shadow:var(--shadow);border-radius:999px;padding:4px 14px 4px 4px;min-height:40px;font-weight:650;font-size:14px;cursor:pointer}
-.new-btn{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px;text-decoration:none;white-space:nowrap}
+.new-btn{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--accent-soft);color:var(--accent-text);font-weight:700;font-size:14px;text-decoration:none;white-space:nowrap}
 .new-btn span{font-size:19px;line-height:1;font-weight:600;margin-top:-2px}
 .new-btn[hidden]{display:none}
 .new-btn b{font-weight:inherit}
@@ -67,15 +68,16 @@ button,a{-webkit-tap-highlight-color:transparent}
 .netbar{max-width:528px;margin:10px auto 0;padding:9px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:14px;font-weight:600;width:calc(100% - 32px)}
 .wrap{max-width:560px;margin:0 auto;padding:16px 16px 0}
 
+h1,h2,.dock-sum strong,.pc-total,.big-num,.who-chip b{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
 h1{font-size:30px;margin:4px 0 8px;letter-spacing:-.025em;line-height:1.12;font-weight:800}
 h2{font-size:17px;margin:22px 0 10px;letter-spacing:-.01em}
 .lede{color:var(--muted);margin:0 0 20px;font-size:16.5px}
-.eyebrow{margin:0 0 2px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.eyebrow{margin:0 0 2px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)}
 .hero{padding:18px 0 4px}
 .hero h1{font-size:38px;line-height:1.05;margin-bottom:12px}
 .how{list-style:none;counter-reset:how;padding:0;margin:28px 0 8px;display:grid;gap:14px}
 .how li{counter-increment:how;display:grid;grid-template-columns:30px 1fr;gap:12px;color:var(--muted);font-size:15px}
-.how li::before{content:counter(how);width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:grid;place-items:center;font-size:14px}
+.how li::before{content:counter(how);width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent-text);font-weight:800;display:grid;place-items:center;font-size:14px}
 .how b{color:var(--ink)}
 .card{background:var(--card);border-radius:var(--r);padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
 .card h3{margin:0;font-size:16px}
@@ -95,11 +97,11 @@ h2{font-size:17px;margin:22px 0 10px;letter-spacing:-.01em}
 .btn.wide{width:100%}
 .btn.big{min-height:58px;font-size:17px;border-radius:18px}
 .btn.ghost{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-2)}
-.btn.soft{background:var(--accent-soft);color:var(--accent)}
+.btn.soft{background:var(--accent-soft);color:var(--accent-text)}
 .btn.sm{white-space:nowrap;min-height:38px;padding:0 13px;font-size:14.5px;border-radius:12px}
 .btn.danger{background:transparent;color:var(--warn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 40%,transparent)}
 .btn:disabled{opacity:.45;cursor:default}
-.link{background:none;border:0;color:var(--accent);font-weight:650;padding:12px 4px;cursor:pointer;font-size:15px}
+.link{background:none;border:0;color:var(--accent-text);font-weight:650;padding:12px 4px;cursor:pointer;font-size:15px}
 .stack{display:flex;flex-direction:column;gap:10px}
 .row2{display:flex;gap:8px;flex-wrap:wrap}
 .row2 > *{flex:1}
@@ -107,7 +109,7 @@ h2{font-size:17px;margin:22px 0 10px;letter-spacing:-.01em}
 /* Fields */
 label.f{display:block;font-weight:650;font-size:14px;margin:14px 0 6px}
 .in{width:100%;min-height:50px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--card);padding:0 14px;font-size:16px;transition:border-color 140ms,box-shadow 140ms}
-.in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.in:focus{outline:none;border-color:var(--accent-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .in::placeholder{color:color-mix(in srgb,var(--muted) 75%,transparent)}
 .in.money{text-align:right}
 .adorn{position:relative;display:flex;align-items:center}
@@ -128,7 +130,7 @@ label.f{display:block;font-weight:650;font-size:14px;margin:14px 0 6px}
 .items-edit{display:flex;flex-direction:column;gap:8px}
 .ie{display:grid;grid-template-columns:1fr 40px;gap:6px;background:var(--card);border-radius:var(--r-sm);padding:6px;box-shadow:var(--shadow)}
 .ie .in{border-color:transparent;background:var(--field)}
-.ie .in:focus{border-color:var(--accent);background:var(--card)}
+.ie .in:focus{border-color:var(--accent-text);background:var(--card)}
 .ie-name{min-height:44px!important;font-weight:600}
 .ie-sub{grid-column:1 / -1;display:grid;grid-template-columns:110px 1fr;gap:6px}
 .ie .x{width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:22px;cursor:pointer;border-radius:10px}
@@ -138,7 +140,7 @@ label.f{display:block;font-weight:650;font-size:14px;margin:14px 0 6px}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);box-shadow:var(--shadow);border-radius:999px;padding:3px 2px 3px 3px;font-weight:600;font-size:14.5px}
 .chip button{border:0;background:none;width:30px;height:30px;border-radius:50%;cursor:pointer;color:var(--muted);font-size:18px}
 details.more-ways{margin-top:6px}
-details.more-ways > summary{cursor:pointer;color:var(--accent);font-weight:650;font-size:14.5px;padding:12px 0 2px;list-style:none}
+details.more-ways > summary{cursor:pointer;color:var(--accent-text);font-weight:650;font-size:14.5px;padding:12px 0 2px;list-style:none}
 details.more-ways > summary::-webkit-details-marker{display:none}
 details.more-ways > summary::before{content:'+ '}
 details.more-ways[open] > summary::before{content:'− '}
@@ -151,7 +153,7 @@ details.more-ways[open] > summary::before{content:'− '}
 .choice:has(input:checked){box-shadow:inset 0 0 0 2px var(--accent)}
 .choice input{appearance:none;-webkit-appearance:none;flex:none;width:22px;height:22px;margin:1px 0 0;border-radius:50%;border:2px solid var(--line-2);background:var(--card);display:grid;place-items:center;transition:border-color 140ms}
 .choice input::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--accent);transform:scale(0);transition:transform var(--pop-ms) var(--pop)}
-.choice input:checked{border-color:var(--accent)}
+.choice input:checked{border-color:var(--accent-text)}
 .choice input:checked::after{transform:scale(1)}
 .choice > span,.switch > span:last-child{display:flex;flex-direction:column}
 .choice span span,.switch span span{color:var(--muted);font-size:14px}
@@ -206,7 +208,7 @@ details.more-ways[open] > summary::before{content:'− '}
 .r-name{font-weight:650;font-size:16px;line-height:1.25}
 .r-meta{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13.5px;color:var(--muted)}
 .r-meta b{color:var(--ink);font-weight:700}
-.r-meta .tag{color:var(--accent);font-weight:650}
+.r-meta .tag{color:var(--accent-text);font-weight:650}
 .who{color:var(--ink);font-weight:600}
 .st{color:var(--muted)}
 .st.pend{color:var(--pend);font-weight:700}
@@ -263,7 +265,7 @@ details.more-ways[open] > summary::before{content:'− '}
 .p-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p-name small{color:var(--muted);font-size:13.5px}
 .p-name small.st-due{color:var(--pend);font-weight:650}
-.p-name small.st-check{color:var(--accent);font-weight:650}
+.p-name small.st-check{color:var(--accent-text);font-weight:650}
 .p-name small.st-done{color:var(--ok);font-weight:650}
 .pc-total{font-size:18px}
 .chev{width:9px;height:9px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 2px;opacity:.5;transition:transform var(--slide-ms) var(--slide)}
@@ -285,15 +287,21 @@ details.more-ways[open] > summary::before{content:'− '}
 
 /* Dock: a floating card at the bottom with the number that matters. */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:0 10px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
-.dock-in{pointer-events:auto;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 12px 12px 18px;border-radius:24px;background:var(--dock);color:var(--dock-ink);box-shadow:var(--shadow-up)}
+/* The page fades into the paper colour just above the dock, so the torn edge sits on calm ground. */
+.dock{padding-top:26px;background:linear-gradient(color-mix(in srgb,var(--bg) 0%,transparent),var(--bg) 24px)}
+.dock-lift{filter:var(--dock-shadow)}
+.dock-in{pointer-events:auto;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:calc(12px + var(--tooth)) 12px 12px 18px;border-radius:0 0 24px 24px;background:var(--paper);color:var(--ink);
+  --tooth:7px;-webkit-mask:conic-gradient(from 135deg at top,#000 90deg,#0000 0) top/calc(2*var(--tooth)) var(--tooth) repeat-x,linear-gradient(#000 0 0) bottom/100% calc(100% - var(--tooth) + 1px) no-repeat;
+  mask:conic-gradient(from 135deg at top,#000 90deg,#0000 0) top/calc(2*var(--tooth)) var(--tooth) repeat-x,linear-gradient(#000 0 0) bottom/100% calc(100% - var(--tooth) + 1px) no-repeat}
+/* With nothing to show but the next step, the button floats on its own. */
+.dock-in.bare{background:none;padding:0 6px;-webkit-mask:none;mask:none}
+.dock-in.bare .btn{box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 35%,transparent)}
 .dock-sum{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
-.dock-sum span{font-size:13px;color:var(--dock-muted);font-weight:600}
+.dock-sum span{font-size:13px;color:var(--muted);font-weight:600}
 .dock-sum strong{font-size:26px;font-weight:800;letter-spacing:-.02em}
-.dock-sum small{font-size:12.5px;color:var(--dock-muted)}
-.dock-sum small.ok-text{color:var(--dock-ok);font-weight:650}
-.dock-sum small.warn-text{color:var(--dock-warn);font-weight:650}
-.dock-in .btn{background:var(--dock-accent);color:var(--dock-accent-ink)}
-.dock-in .btn.ghost{background:transparent;color:var(--dock-ink);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.3)}
+.dock-sum small{font-size:12.5px;color:var(--muted)}
+.dock-sum small.ok-text{color:var(--ok);font-weight:650}
+.dock-sum small.warn-text{color:var(--pend);font-weight:650}
 .dock-sum strong{display:inline-block;transform-origin:left center}
 .dock-in > .btn.wide:only-child{flex:1}
 
@@ -329,7 +337,7 @@ dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 .path span{grid-column:1;color:var(--muted);font-size:14px}
 .path .go{grid-row:1 / span 2;grid-column:2}
 .path:first-child{background:var(--accent-soft)}
-.path:first-child b{color:var(--accent)}
+.path:first-child b{color:var(--accent-text)}
 
 /* Toast: a small pill that rises over the dock. Tap it or swipe it away; Undo is plain text. */
 #toasts{position:fixed;left:0;right:0;bottom:calc(104px + env(safe-area-inset-bottom));z-index:20;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
@@ -362,7 +370,7 @@ dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 </header>
 <div id="netbar" class="netbar" role="status" hidden>Can’t reach the tab right now. Your taps will save when you’re back online.</div>
 <main class="wrap" id="app"><p class="muted" role="status">Loading…</p></main>
-<div class="dock" id="dock" hidden><div class="dock-in" id="dockIn"></div></div>
+<div class="dock" id="dock" hidden><div class="dock-lift"><div class="dock-in" id="dockIn"></div></div></div>
 <dialog id="sheet" class="sheet" aria-labelledby="sheetTitle"><div class="sheet-wrap" id="sheetWrap"><div class="scrim" id="scrim"></div>
   <div class="sheet-panel" id="sheetPanel" tabindex="-1" autofocus><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div></dialog>
 <div id="toasts" role="status" aria-live="polite"></div>

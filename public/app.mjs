@@ -5,7 +5,9 @@ import { installMotion, still, dur, ease, anim, collapse, EXIT_EASE, liveY, hold
 
 const API = '/api/tab';
 const LIVE = 'https://tabsplitterns.netlify.app';
-const PALETTE = ['#4B57D1', '#0E8A5C', '#C2410C', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#A16207', '#4338CA', '#0F766E', '#9D174D', '#475569'];
+// Person colours: deep and earthy to sit with the cream, each distinct from the next, and none in the
+// coral family, so your claims never look like a button.
+const PALETTE = ['#0F766E', '#0369A1', '#BE185D', '#4D7C0F', '#6B21A8', '#A16207', '#1D4ED8', '#15803D', '#9D174D', '#0E7490', '#475569', '#854D0E'];
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
 
@@ -855,6 +857,7 @@ let dockKey = null, dockNum = null, dockTick = 0;
 function showDock(html, key, num) {
   $('#dock').hidden = false;
   setHTML($('#dockIn'), html);
+  $('#dockIn').classList.toggle('bare', !html.includes('dock-sum'));
   const el = $('#dockIn .dock-sum strong');
   const was = dockKey === key ? dockNum : null;
   dockKey = key; dockNum = num;
