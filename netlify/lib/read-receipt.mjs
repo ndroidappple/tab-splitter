@@ -43,8 +43,8 @@ async function addSpend(store, now, credits) {
 }
 
 export async function readReceipt({ imageBase64, mediaType, store, cap, now = Date.now(), env, fetchImpl }) {
-  if (typeof imageBase64 !== 'string' || imageBase64.length < 100) throw new HttpError(400, 'That photo didn’t come through. Try again.');
-  if (imageBase64.length > MAX_IMAGE_CHARS) throw new HttpError(413, 'That photo is too large');
+  if (typeof imageBase64 !== 'string' || imageBase64.length < 100) throw new HttpError(400, 'That photo didn’t come through. Try again, or type the items.');
+  if (imageBase64.length > MAX_IMAGE_CHARS) throw new HttpError(413, 'That photo is too large. Try again, or type the items.');
   const before = await spent(store, now);
   if (before.credits >= cap) throw new HttpError(429, 'Receipt reading is paused for this month. Type the items instead.');
 
@@ -60,7 +60,11 @@ export async function readReceipt({ imageBase64, mediaType, store, cap, now = Da
   }
   const total = await addSpend(store, now, used);
   const best = tries.find((t) => t.ok) || tries.filter((t) => t.receipt).at(-1);
-  if (!best) throw new HttpError(502, 'Couldn’t read that receipt. Try again, or type the items.');
+  if (!best) {
+    // Without this the reason (bad key, rejected image, gateway down) never reaches the function logs.
+    console.error('receipt scan failed', JSON.stringify(tries.map(({ model, error, ms }) => ({ model, error: error || 'no tool call in reply', ms }))));
+    throw new HttpError(502, 'Couldn’t read that receipt. Try again, or type the items.');
+  }
   return {
     receipt: best.receipt,
     model: best.model,
