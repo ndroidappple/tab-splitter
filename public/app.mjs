@@ -187,9 +187,10 @@ function renderStart() {
     ${hasDraft(d) ? `<div class="card resume"><div><b>Pick up where you left off</b><span class="muted">${esc(d.title || 'Your last receipt')} · ${plural((d.items || []).filter((it) => it.name).length, 'item')}</span></div>
       <div class="row2"><button type="button" class="btn sm" data-act="resume">Continue</button><button type="button" class="btn sm ghost" data-act="discard">Discard</button></div></div>` : ''}
     <div class="stack">
-      <label class="btn wide big" for="photo">${S.busy ? '<span class="spin"></span> Reading the receipt…' : 'Take a photo of the receipt'}</label>
+      <label class="btn wide big" for="photo">${S.busy ? `<span class="spin"></span> ${S.warming ? 'Waking up the receipt reader…' : 'Reading the receipt…'}` : 'Take a photo of the receipt'}</label>
       <input id="photo" type="file" accept="image/*" class="sr" ${S.busy ? 'disabled' : ''}>
-      <button type="button" class="btn ghost wide" data-act="type" ${S.busy ? 'disabled' : ''}>Type the items instead</button>
+      ${S.warming ? '<p class="note" style="text-align:center;margin:0">This can take up to a minute when Splitty hasn’t been used in a while.</p>' : ''}
+      <button type="button" class="btn ghost wide" data-act="type" ${S.busy && !S.warming ? 'disabled' : ''}>Type the items instead</button>
     </div>
     <p id="scanStatus" class="sr" role="status" aria-live="polite">${S.busy ? 'Reading the receipt' : ''}</p>
     <ol class="how">
@@ -213,18 +214,25 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+let scanRun = 0; // bumped when someone gives up on a scan, so a late answer doesn't replace what they typed
 async function scanPhoto(file) {
-  S.busy = true; renderStart();
+  const run = ++scanRun;
+  S.busy = true; S.warming = false; renderStart();
   try {
     const image = await shrink(file);
-    // 503 means the server's AI key hasn't arrived yet (it can lag after the app sits idle), so wait and retry quietly.
+    // 503 means Netlify hasn't given the server its AI key yet. That lags for up to a minute after a
+    // deploy or a quiet spell, so say so and keep retrying; typing the items stays available meanwhile.
     let r, d;
     for (let attempt = 0; ; attempt++) {
       r = await fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) });
       d = await r.json().catch(() => ({}));
-      if (r.status !== 503 || attempt >= 8) break; // about 40 seconds in all
+      if (run !== scanRun) return;
+      if (r.status !== 503 || attempt >= 18) break; // about 90 seconds in all
+      if (!S.warming) { S.warming = true; renderStart(); }
       await new Promise((res) => setTimeout(res, 5000));
+      if (run !== scanRun) return;
     }
+    S.warming = false;
     if (!r.ok) throw new Error(d.error || 'Couldn’t read that receipt. Try again, or type the items.');
     const rc = d.receipt || {};
     S.receipt = rc; S.check = d.check; S.scan = d.model;
@@ -235,7 +243,8 @@ async function scanPhoto(file) {
     S.busy = false;
     go('review');
   } catch (e) {
-    S.busy = false; renderStart();
+    if (run !== scanRun) return;
+    S.busy = false; S.warming = false; renderStart();
     // Server messages already say what to do next; a photo the phone can't open throws an Event, not an Error.
     toast((e && e.message) || 'Couldn’t open that photo. Try again, or type the items.');
   }
@@ -411,7 +420,7 @@ app.addEventListener('click', (e) => {
   if (tabId) return;
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
-  if (a === 'type') { S.receipt = null; S.scan = null; if (!S.items.length) S.items = [{ name: '', qty: 1, price: '' }, { name: '', qty: 1, price: '' }]; go('review'); app.querySelector('.ie input').focus(); }
+  if (a === 'type') { scanRun++; S.busy = false; S.warming = false; S.receipt = null; S.scan = null; if (!S.items.length) S.items = [{ name: '', qty: 1, price: '' }, { name: '', qty: 1, price: '' }]; go('review'); app.querySelector('.ie input').focus(); }
   if (a === 'resume') { Object.assign(S, readJSON('tab-draft', {})); go('review'); }
   if (a === 'discard') { const was = store.get('tab-draft'); store.set('tab-draft', null); renderStart(); toast('Draft discarded', { undo: () => { store.set('tab-draft', was); renderStart(); } }); }
   if (a === 'photo') openSheet({ type: 'photo' });
