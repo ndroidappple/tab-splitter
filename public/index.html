@@ -293,6 +293,10 @@ details.more-ways[open] > summary::before{content:'− '}
 /* Sheets rise from the bottom edge on the surface spring, follow a drag down, and slide away however
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */
 dialog.sheet{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;padding:0;background:transparent;color:var(--ink);overflow:hidden}
+/* clip, not just hidden: a hidden box can still be scrolled by the browser. A rising sheet starts below the screen,
+   and Safari scrolled the dialog to bring it into view, so the sheet overshot upward and the dim slid away until
+   the rise ended and the scroll snapped back. A clipped box isn't a scroll container, so there is nothing to scroll. */
+dialog.sheet,.sheet-wrap{overflow:clip}
 dialog.sheet::backdrop{background:transparent}
 /* The page underneath stays put without toggling its overflow (which makes Safari resize its toolbar mid-rise):
    the dim takes no scroll gestures, and scrolling inside the sheet never hands off to the page. */

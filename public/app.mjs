@@ -986,6 +986,8 @@ function closeSheet(speed = 0) {
   a.finished.catch(() => {}).then(done);
 }
 dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); }); // Escape
+// Belt and braces for browsers without overflow: clip: if anything scrolls the dialog, put it straight back.
+for (const el of [dlg, sheetWrap]) el.addEventListener('scroll', () => { if (el.scrollTop) el.scrollTop = 0; });
 scrim.addEventListener('click', () => closeSheet());
 
 /* The sheet stays in the part of the screen the keyboard leaves visible. */
