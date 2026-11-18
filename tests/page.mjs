@@ -85,7 +85,7 @@ await step('typing the Wild Tomato receipt shows tax, fees and tip as the differ
   }
   await nick.type('#tTitle', 'Wild Tomato');
   await nick.type('#charge', '180.09');
-  assert.match(nick.text('#reviewStatus'), /Tax, fees and tip: \$40\.09/);
+  assert.match(nick.text('#reviewStatus'), /\$140\.00 subtotal \+ \$40\.09 tax, fees and tip/);
   const draft = JSON.parse(nick.w.localStorage.getItem('tab-draft'));
   assert.equal(draft.items.length, WILD.length, 'the receipt is saved as it is typed');
   assert.equal(draft.charge, '180.09');

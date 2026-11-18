@@ -253,23 +253,25 @@ function reviewNumbers() {
   const rc = S.receipt;
   const inSub = rc && Array.isArray(rc.fees) ? rc.fees.filter((f) => f.listed_with_items).reduce((s, f) => s + Math.round(f.amount * 100), 0) : 0;
   const printed = rc ? Math.round(((rc.subtotal ?? rc.total) || 0) * 100) : null;
-  return { sum, printed, inSub, charge: toCents(S.charge) };
+  return { sum, printed, inSub, sub: sum + inSub, charge: toCents(S.charge) };
 }
-// The items' sum and whether it matches the receipt live in the dock, so they stay in view while lines are fixed.
+// The subtotal (items plus any fee printed with them, like a restaurant surcharge) and whether it matches the
+// receipt live in the dock, so they stay in view while lines are fixed. The note under the card charge uses the
+// same subtotal, so the two numbers on screen always add up to the charge.
 function reviewDock() {
-  const n = reviewNumbers(), sum = n.sum + n.inSub;
+  const n = reviewNumbers(), sum = n.sub;
   const matched = n.printed && Math.abs(n.printed - n.inSub - n.sum) < 1;
   const note = matched ? '<small class="ok-text">✓ Matches the receipt</small>'
     : n.printed ? `<small class="warn-text money">Receipt says ${fmt(n.printed)}</small>` : '<small>Before tax and tip</small>';
-  showDock(`<div class="dock-sum" aria-live="polite"><span>Items add up to</span><strong class="money">${fmt(sum)}</strong>${note}</div>
+  showDock(`<div class="dock-sum" aria-live="polite"><span>Subtotal</span><strong class="money">${fmt(sum)}</strong>${note}</div>
     <button type="button" class="btn" data-act="toPeople">Next</button>`, 'review', sum);
 }
 function reviewStatus() {
   const n = reviewNumbers();
   const parts = [];
   if (Number.isFinite(n.charge) && n.charge > 0) {
-    if (n.charge < n.sum) parts.push(`<p class="banner warn">The card charge is less than the items. Check it.</p>`);
-    else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
+    if (n.charge < n.sub) parts.push(`<p class="banner warn">The card charge is less than the subtotal. Check it.</p>`);
+    else parts.push(`<p class="note money">${fmt(n.sub)} subtotal + ${fmt(n.charge - n.sub)} tax, fees and tip</p>`);
   }
   return parts.join('');
 }
