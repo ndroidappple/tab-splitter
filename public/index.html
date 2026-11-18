@@ -304,7 +304,7 @@ details.more-ways[open] > summary::before{content:'− '}
 .dock-sum small.warn-text{color:var(--pend);font-weight:650}
 .dock-sum strong{display:inline-block;transform-origin:left center}
 .dock-in > .btn.wide:only-child{flex:1}
-/* The one thing to do next (Review and pay, while you owe): a light circles the button's rim with a
+/* The one thing to do next (the dock's solid button, on every screen): a light circles the button's rim with a
    soft halo behind it. GymBuddy's Week in review chip, in Splitty's coral. app.mjs syncs every glow
    to one clock (--glow-t), so a re-rendered dock doesn't restart the spin. Reduce Motion holds it still. */
 @property --glow-a{syntax:'<angle>';inherits:false;initial-value:0deg}
@@ -315,6 +315,7 @@ details.more-ways[open] > summary::before{content:'− '}
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
   mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 .glow::after{z-index:-1;filter:blur(10px);opacity:.45;animation:glow-spin 3.6s linear infinite,glow-halo 3s ease-in-out infinite;animation-delay:var(--glow-t,0ms),0ms}
+.glow:disabled::before,.glow:disabled::after{display:none}
 @keyframes glow-spin{to{--glow-a:360deg}}
 @keyframes glow-halo{50%{opacity:.2}}
 @media (prefers-color-scheme: dark){.glow{--glow-1:#FFB070;--glow-2:#FFE08A}.glow::after{opacity:.55}}

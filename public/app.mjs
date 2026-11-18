@@ -860,8 +860,10 @@ function showDock(html, key, num) {
   $('#dock').hidden = false;
   setHTML($('#dockIn'), html);
   $('#dockIn').classList.toggle('bare', !html.includes('dock-sum'));
-  // Every glow spins on one clock, so a dock rebuilt mid-spin picks up where the last one was.
-  for (const g of $('#dockIn').querySelectorAll('.glow')) if (!g.style.getPropertyValue('--glow-t')) g.style.setProperty('--glow-t', `${-(performance.now() % 3600)}ms`);
+  // The dock's solid button is the next step on every screen, so it glows. Every glow spins on one clock,
+  // so a dock rebuilt mid-spin picks up where the last one was.
+  const g = $('#dockIn > .btn:not(.ghost)');
+  if (g && !g.classList.contains('glow')) { g.classList.add('glow'); g.style.setProperty('--glow-t', `${-(performance.now() % 3600)}ms`); }
   const el = $('#dockIn .dock-sum strong');
   const was = dockKey === key ? dockNum : null;
   dockKey = key; dockNum = num;
@@ -901,7 +903,7 @@ function renderDock(C) {
   } else {
     num = r.owed;
     left = `<span>${r.p.paid != null ? 'Still to pay' : 'Your total'}</span><strong class="money">${fmt(r.owed)}</strong><small>Tax and tip included</small>`;
-    right = T.closed ? '' : '<button type="button" class="btn glow" data-act="mine">Review and pay</button>';
+    right = T.closed ? '' : '<button type="button" class="btn" data-act="mine">Review and pay</button>';
   }
   showDock(`<div class="dock-sum" aria-live="polite">${left}</div>${right}`, 'p:' + me, num);
 }
