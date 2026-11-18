@@ -1,7 +1,7 @@
 // The tab page: start a tab (host), assign or claim items, pay, and the host's panel.
 // The host comes first: they enter the receipt, assign what they know, and send the link for the rest.
 import { HOST, SLACK, compute, people as peopleOf, itemsTotal, tidyName, slotsOf } from './split.mjs';
-import { installMotion, still, dur, ease, anim, collapse, EXIT_EASE } from './motion.mjs';
+import { installMotion, still, dur, ease, anim, collapse, EXIT_EASE, liveY, hold } from './motion.mjs';
 
 const API = '/api/tab';
 const LIVE = 'https://tabsplitterns.netlify.app';
@@ -903,52 +903,70 @@ function renderDock(C) {
 /* GymBuddy's sheet: rises from the bottom edge on the surface spring while the scrim fades in, slides
    back down however it closes, and moves to a new sheet by easing its height. */
 const dlg = $('#sheet'), panel = $('#sheetPanel'), scrim = $('#scrim'), sheetWrap = $('#sheetWrap');
-let closing = null;
+let closing = null, resizing = null;
 const sheetC = () => (T ? compute_() : null);
 function openSheet(s) {
   const b = $('#sheetBody');
-  if (dlg.open && !closing) { // already up: swap what it shows
+  if (dlg.open && !closing) { // already up: swap what it shows, easing the height from wherever it is now
     const h0 = panel.offsetHeight;
+    if (resizing) { resizing.cancel(); resizing = null; } // measure the new sheet's own height, not a resize in flight
     sheet = s; b._h = null; renderSheet(sheetC()); b.scrollTop = 0;
     const h1 = panel.offsetHeight;
     if (Math.abs(h1 - h0) > 1) {
-      const a = anim(panel, [{ height: `${h0}px` }, { height: `${h1}px` }], 'surface');
-      if (a) { panel.style.overflow = 'hidden'; a.finished.catch(() => {}).then(() => { panel.style.overflow = ''; }); }
+      const a = resizing = anim(panel, [{ height: `${h0}px` }, { height: `${h1}px` }], 'surface');
+      if (a) { panel.style.overflow = 'hidden'; a.finished.catch(() => {}).then(() => { if (resizing === a) { resizing = null; panel.style.overflow = ''; } }); }
     }
     anim(b, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], 'enter');
     return;
   }
-  if (closing) { closing = null; stopSheetMotion(); } // reopened on its way out
+  // Reopened on its way out: rise from where it is rather than dropping back to the bottom edge.
+  const from = closing ? `translateY(${liveY(panel)}px)` : 'translateY(100%)';
+  const fade = closing ? getComputedStyle(scrim).opacity : 0;
+  if (closing) { closing = null; stopSheetMotion(); }
   sheet = s; b._h = null; renderSheet(sheetC());
   if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
   document.documentElement.style.overflow = 'hidden';
   fitSheet();
-  anim(panel, [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], 'surface');
-  anim(scrim, [{ opacity: 0 }, { opacity: 1 }], 'enter');
+  anim(panel, [{ transform: from }, { transform: 'translateY(0)' }], 'surface');
+  anim(scrim, [{ opacity: fade }, { opacity: 1 }], 'enter');
 }
 function stopSheetMotion() {
   for (const el of [panel, scrim]) if (el.getAnimations) el.getAnimations().forEach((x) => x.cancel());
-  panel.style.transform = ''; scrim.style.opacity = '';
+  resizing = null;
+  panel.style.transform = ''; panel.style.overflow = ''; scrim.style.opacity = '';
+  dlg.classList.remove('exiting');
 }
-/** Closes the sheet now as far as the page is concerned; the slide down finishes on its own. */
-function closeSheet() {
+/** Closes the sheet. The page is usable again at once (the dialog closes now and only its slide down
+    remains, untouchable); speed is a finger's px/ms when a flick closed it, so the slide carries on at
+    that speed instead of starting again from rest. */
+function closeSheet(speed = 0) {
   sheet = null;
   if (!dlg.open || closing) return;
   const tok = closing = {};
+  const moving = !still() && !!panel.animate;
+  const at = moving ? liveY(panel) : 0, scrim0 = moving ? getComputedStyle(scrim).opacity : 0; // mid-rise, mid-drag or at rest
+  hold(panel, ['transform']); hold(scrim, ['opacity']);
+  if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
+  document.documentElement.style.overflow = '';
+  document.body.appendChild($('#toasts'));
   const done = () => {
     if (closing !== tok) return; // reopened meanwhile
     closing = null;
-    if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
     const b = $('#sheetBody'); b._h = null; b.innerHTML = '';
-    document.documentElement.style.overflow = '';
-    document.body.appendChild($('#toasts'));
     stopSheetMotion();
   };
-  const at = panel.animate ? getComputedStyle(panel).transform : 'none'; // where a drag left it
-  const opts = { duration: dur('exit') + 20, easing: EXIT_EASE, fill: 'forwards' };
-  const a = still() ? null : anim(panel, [{ transform: at === 'none' ? 'translateY(0)' : at }, { transform: 'translateY(100%)' }], 'exit', opts);
-  if (!a) { done(); return; }
-  anim(scrim, [{ opacity: getComputedStyle(scrim).opacity }, { opacity: 0 }], 'exit', opts);
+  if (!moving) { done(); return; }
+  dlg.classList.add('exiting');
+  const left = Math.max(1, panel.offsetHeight - at);
+  let opts = { duration: dur('exit') + 20, easing: EXIT_EASE, fill: 'forwards' };
+  if (speed > 0) {
+    // Start at the finger's speed and never slower than a brisk exit; the curve's opening slope matches the release.
+    const duration = Math.round(Math.min(240, Math.max(90, left / Math.max(speed, 1))));
+    const y1 = Math.min(0.4, (0.4 * speed * duration) / left);
+    opts = { duration, easing: `cubic-bezier(.4, ${y1.toFixed(3)}, 1, 1)`, fill: 'forwards' };
+  }
+  const a = panel.animate([{ transform: `translateY(${at}px)` }, { transform: 'translateY(100%)' }], opts);
+  scrim.animate([{ opacity: scrim0 }, { opacity: 0 }], opts);
   a.finished.catch(() => {}).then(done);
 }
 dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); }); // Escape
@@ -980,12 +998,17 @@ if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll',
       g.on = dy > 0 && dy > Math.abs(dx);
       if (!g.on) return;
       g.y += START; // the dead zone doesn't count, so the sheet doesn't jump when it starts following
+      // Caught while still rising or springing back: hold it where it is and follow the finger from there.
+      g.base = liveY(panel); g.fade = +getComputedStyle(scrim).opacity;
+      hold(panel, ['transform']); hold(scrim, ['opacity']);
       panel.classList.add('dragging');
     }
     e.preventDefault();
-    g.dy = Math.max(0, p.clientY - g.y);
+    g.dy = Math.max(0, g.base + p.clientY - g.y);
     panel.style.transform = `translateY(${g.dy}px)`;
-    scrim.style.opacity = String(1 - Math.min(1, g.dy / panel.offsetHeight));
+    // The dim picks up from where it was when caught and clears as the sheet reaches the bottom edge.
+    const h = panel.offsetHeight, room = Math.max(1, h - g.base);
+    scrim.style.opacity = String(Math.max(0, g.fade * (1 - Math.max(0, g.dy - g.base) / room)));
     g.trail.push([p.clientY, e.timeStamp]); if (g.trail.length > 5) g.trail.shift();
   }, { passive: false });
   const end = (e) => {
@@ -996,7 +1019,7 @@ if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll',
     const speed = a && z && z[1] > a[1] ? (z[0] - a[0]) / (z[1] - a[1]) : 0;
     if (e.type === 'touchend' && (d.dy > Math.min(FAR, panel.offsetHeight * 0.35) || (speed > FLICK && d.dy > 24))) {
       if (sheet && sheet.type === 'paycheck') payReturn = null;
-      closeSheet();
+      closeSheet(Math.max(0, speed));
       return;
     }
     const at = panel.style.transform;

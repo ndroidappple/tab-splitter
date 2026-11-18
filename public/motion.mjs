@@ -7,7 +7,7 @@ const SPRINGS = {
   enter: { f: 3.6, z: 1, fallback: 'cubic-bezier(.16, 1, .3, 1)' },     // content arriving
   pop: { f: 3, z: 0.7, fallback: 'cubic-bezier(.2, 1.5, .4, 1)' },      // small things landing, presses letting go
   slide: { f: 3.4, z: 0.78, fallback: 'cubic-bezier(.3, 1.3, .5, 1)' }, // controls moving across
-  surface: { f: 1.9, z: 0.9, fallback: 'cubic-bezier(.2, 1, .3, 1)' },  // sheets, screens, the dock
+  surface: { f: 2.6, z: 0.92, fallback: 'cubic-bezier(.2, 1, .3, 1)' }, // sheets, screens, the dock: 95% there in 255 ms
 };
 // Exits run quicker than entrances and speed up as they go, so closing feels immediate.
 const EXIT_MS = 200;
@@ -41,6 +41,24 @@ export const ease = (name) => (name === 'exit' ? EXIT_EASE : EASE[name]);
 export function anim(el, frames, name, extra) {
   if (still() || !el || !el.animate) return null;
   return el.animate(frames, Object.assign({ duration: dur(name), easing: ease(name) }, extra));
+}
+
+/** Where an element sits vertically right now, mid-animation included, in px. */
+const styleOf = (el) => (el.ownerDocument.defaultView || window).getComputedStyle(el);
+export function liveY(el) {
+  const m = styleOf(el).transform;
+  return m && m !== 'none' ? new DOMMatrixReadOnly(m).m42 : 0;
+}
+
+/** Stops el's animations, leaving it where they had it (as inline styles), so a finger can take over without a jump. */
+export function hold(el, props) {
+  if (!el || !el.getAnimations) return;
+  const running = el.getAnimations();
+  if (!running.length) return;
+  const s = styleOf(el), now = {};
+  for (const p of props) now[p] = s[p];
+  running.forEach((a) => a.cancel());
+  Object.assign(el.style, now);
 }
 
 /** Folds an element away (height, padding, margins, opacity) so whatever is below glides up. Resolves when done. */

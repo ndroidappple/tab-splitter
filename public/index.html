@@ -288,7 +288,9 @@ details.more-ways[open] > summary::before{content:'− '}
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */
 dialog.sheet{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;padding:0;background:transparent;color:var(--ink);overflow:hidden}
 dialog.sheet::backdrop{background:transparent}
-.sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center;transition:height 300ms cubic-bezier(.38,.7,.125,1)}
+.sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center}
+/* A closing sheet lets go of the page at once: the dialog is already closed and just finishing its slide, so taps go through. */
+dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 .scrim{position:absolute;inset:0;background:rgba(10,11,14,.42)}
 .sheet-panel{position:relative;width:100%;max-width:560px;max-height:min(90vh,calc(100% - env(safe-area-inset-top) - 12px));display:flex;flex-direction:column;background:var(--card);border-radius:26px 26px 0 0;outline:none;box-shadow:0 -10px 40px rgba(0,0,0,.18)}
 .sheet-panel.dragging{will-change:transform}
