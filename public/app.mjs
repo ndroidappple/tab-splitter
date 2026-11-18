@@ -253,16 +253,18 @@ function reviewNumbers() {
   const printed = rc ? Math.round(((rc.subtotal ?? rc.total) || 0) * 100) : null;
   return { sum, printed, inSub, charge: toCents(S.charge) };
 }
+// The items' sum and whether it matches the receipt live in the dock, so they stay in view while lines are fixed.
+function reviewDock() {
+  const n = reviewNumbers(), sum = n.sum + n.inSub;
+  const matched = n.printed && Math.abs(n.printed - n.inSub - n.sum) < 1;
+  const note = matched ? '<small class="ok-text">✓ Matches the receipt</small>'
+    : n.printed ? `<small class="warn-text money">Receipt says ${fmt(n.printed)}</small>` : '<small>Before tax and tip</small>';
+  showDock(`<div class="dock-sum" aria-live="polite"><span>Items add up to</span><strong class="money">${fmt(sum)}</strong>${note}</div>
+    <button type="button" class="btn" data-act="toPeople">Next</button>`, 'review', sum);
+}
 function reviewStatus() {
   const n = reviewNumbers();
-  // One line when the items match the receipt; the warning only when they don't.
   const parts = [];
-  const matched = n.printed && Math.abs(n.printed - n.inSub - n.sum) < 1;
-  if (matched) parts.push(`<p class="banner ok money">Items add up to ${fmt(n.sum + n.inSub)}, matching the receipt.</p>`);
-  else {
-    parts.push(`<p class="sum-line money"><span>Items add up to</span><b>${fmt(n.sum + n.inSub)}</b></p>`);
-    if (n.printed) parts.push(`<p class="banner warn">The receipt says ${fmt(n.printed)}. Check the lines against the photo.</p>`);
-  }
   if (Number.isFinite(n.charge) && n.charge > 0) {
     if (n.charge < n.sum) parts.push(`<p class="banner warn">The card charge is less than the items. Check it.</p>`);
     else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
@@ -289,8 +291,8 @@ function renderReview() {
     <h2>Items</h2>
     <div class="items-edit" id="itemsEdit">${S.items.map(itemRow).join('')}</div>
     <button type="button" class="btn ghost wide add-line" data-act="addline">+ Add a line</button>
-    <div class="sh-foot"><button type="button" class="btn wide" data-act="toPeople">Next: who was there</button>
-    <button type="button" class="link" data-act="restart">Start over</button></div>`;
+    <div class="sh-foot"><button type="button" class="link" data-act="restart">Start over</button></div>`;
+  reviewDock();
 }
 const itemRow = (it, k) => `<div class="ie" data-k="${k}">
   <input class="in ie-name" data-f="name" aria-label="Item ${k + 1} name" value="${esc(it.name)}" placeholder="Item ${k + 1}" maxlength="60" autocomplete="off">
@@ -331,7 +333,8 @@ function renderPeople() {
       <label class="choice"><input type="radio" name="mode" value="items" ${S.mode === 'items' ? 'checked' : ''}><span><b>By what each had</b></span></label>
       <label class="choice"><input type="radio" name="mode" value="even" ${S.mode === 'even' ? 'checked' : ''}><span><b>Evenly</b></span></label>
     </div>
-    <div class="sh-foot"><button type="button" class="btn wide" data-act="create">Create the tab</button></div>`;
+`;
+  showDock('<button type="button" class="btn wide" data-act="create">Create the tab</button>', 'people');
   $('#addForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const names = $('#addName').value.split(/[,\n]/).map((n) => n.replace(/\s+/g, ' ').trim().slice(0, 24)).filter(Boolean);
@@ -350,7 +353,7 @@ document.addEventListener('input', dropPrefix, true);
 app.addEventListener('input', (e) => {
   if (tabId) return;
   const row = e.target.closest('.ie');
-  if (row) { S.items[Number(row.dataset.k)][e.target.dataset.f] = e.target.value; setHTML($('#reviewStatus'), reviewStatus()); saveDraft(); return; }
+  if (row) { S.items[Number(row.dataset.k)][e.target.dataset.f] = e.target.value; setHTML($('#reviewStatus'), reviewStatus()); reviewDock(); saveDraft(); return; }
   if (e.target.id === 'charge') { S.charge = e.target.value; setHTML($('#reviewStatus'), reviewStatus()); }
   if (e.target.id === 'tTitle') S.title = e.target.value;
   if (e.target.id === 'hostName') S.hostName = e.target.value;
@@ -392,7 +395,7 @@ async function createTab() {
   if (other && !S.payer.name.trim()) { toast('Enter who paid'); $('#payerName').focus(); return; }
   if (!S.hostName.trim()) { toast('Enter your name'); $('#hostName').focus(); return; }
   if (other && S.payer.name.trim().toLowerCase() === S.hostName.trim().toLowerCase()) { toast('If you paid, pick “I did”'); return; }
-  const btn = app.querySelector('[data-act="create"]'); btn.disabled = true;
+  const btn = document.querySelector('[data-act="create"]'); btn.disabled = true;
   try {
     const title = S.title.trim() || `Tab · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const mine = Object.fromEntries(WAYS.map((k) => [k, S[k].trim()]));
@@ -410,7 +413,7 @@ async function createTab() {
   } catch (e) { toast(e.message); btn.disabled = false; }
 }
 
-app.addEventListener('click', (e) => {
+function startClick(e) {
   if (tabId) return;
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
@@ -429,7 +432,8 @@ app.addEventListener('click', (e) => {
   }
   if (a === 'delname') { S.people.splice(Number(b.dataset.k), 1); saveDraft(); renderPeople(); }
   if (a === 'create') createTab();
-});
+}
+app.addEventListener('click', startClick);
 
 /* ======================================================================
    A tab
@@ -844,31 +848,55 @@ function linesHtml(r) {
     ${r.locked ? '<p class="note">Locked when they paid, so later changes won’t move it.</p>' : ''}`;
 }
 
+/* The dock is the one place each person's key number lives, pinned while they scroll. When that number
+   changes (a claim, a payment, a fixed line) it counts to its new value and gives a small pop, so the
+   change is seen without being looked for. Quick, and it never holds anything up. */
+let dockKey = null, dockNum = null, dockTick = 0;
+function showDock(html, key, num) {
+  $('#dock').hidden = false;
+  setHTML($('#dockIn'), html);
+  const el = $('#dockIn .dock-sum strong');
+  const was = dockKey === key ? dockNum : null;
+  dockKey = key; dockNum = num;
+  if (!el || num == null || was == null || was === num || still()) return;
+  const run = ++dockTick, t0 = performance.now(), ms = 260;
+  el.textContent = fmt(was); // count from the old number, not a one-frame flash of the new one
+  const step = (now) => {
+    if (run !== dockTick) return;
+    const k = Math.min(1, Math.max(0, (now - t0) / ms)), e = 1 - Math.pow(1 - k, 3); // a frame's clock can read just before t0
+    el.textContent = fmt(Math.round(was + (num - was) * e));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  anim(el, [{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 'pop');
+}
 function renderDock(C) {
-  const dock = $('#dock');
-  dock.hidden = false;
   if (editFor && T.people[editFor]) {
     const r = C.byId[editFor];
-    setHTML($('#dockIn'), `<div class="dock-sum" aria-live="polite"><span>${esc(nameOf(editFor))}’s total</span><strong class="money">${fmt(r.total)}</strong><small>Tax and tip included</small></div>
-      <button type="button" class="btn" data-act="editdone">Done</button>`);
+    showDock(`<div class="dock-sum" aria-live="polite"><span>${esc(nameOf(editFor))}’s total</span><strong class="money">${fmt(r.total)}</strong><small>Tax and tip included</small></div>
+      <button type="button" class="btn" data-act="editdone">Done</button>`, 'p:' + editFor, r.total);
     return;
   }
   const r = C.byId[me];
-  let left, right = '';
+  let left, right = '', num = null;
   if (me === HOST) {
     const open = Math.max(0, C.pool), owed = C.res.reduce((s, x) => s + (x.p.id === HOST || x.settled ? 0 : Math.max(0, x.owed)), 0);
+    num = C.collected;
     left = `<span>Paid back to you</span><strong class="money">${fmt(C.collected)}</strong><small class="money">${open > SLACK ? `${fmt(open)} not claimed yet` : owed > SLACK ? `${fmt(owed)} still owed` : 'Everyone’s square'}</small>`;
     right = T.closed ? '' : '<button type="button" class="btn" data-act="share">Share link</button>';
   } else if (r.p.paid != null && r.owed <= SLACK) {
+    num = r.total;
     left = `<span>You’re all set</span><strong class="money">${fmt(r.total)}</strong><small>${r.p.ok ? `${esc(T.payer.name)} confirmed it` : 'Marked as paid'}</small>`;
     right = '<button type="button" class="btn ghost" data-act="mine">Details</button>';
   } else if (!r.total) {
+    num = 0;
     left = `<span>Your total</span><strong class="money">$0.00</strong><small>${T.mode === 'even' ? 'Tap items you had' : 'Tap what you had'}</small>`;
   } else {
+    num = r.owed;
     left = `<span>${r.p.paid != null ? 'Still to pay' : 'Your total'}</span><strong class="money">${fmt(r.owed)}</strong><small>Tax and tip included</small>`;
     right = T.closed ? '' : '<button type="button" class="btn" data-act="mine">Review and pay</button>';
   }
-  setHTML($('#dockIn'), `<div class="dock-sum" aria-live="polite">${left}</div>${right}`);
+  showDock(`<div class="dock-sum" aria-live="polite">${left}</div>${right}`, 'p:' + me, num);
 }
 
 /* ---------- Sheets ---------- */
@@ -1251,6 +1279,7 @@ app.addEventListener('submit', async (e) => {
 
 $('#meBtn').addEventListener('click', () => openSheet({ type: 'who' }));
 $('#dockIn').addEventListener('click', (e) => {
+  if (!tabId) { startClick(e); return; } // setup steps keep their next step in the dock
   const b = e.target.closest('[data-act]'); if (!b) return;
   if (b.dataset.act === 'mine') openSheet({ type: 'mine' });
   if (b.dataset.act === 'share') shareLink();
