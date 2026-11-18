@@ -164,9 +164,11 @@ const hasDraft = (d) => d && ((d.items || []).some((it) => it.name || it.price) 
 function saveDraft() { store.set('tab-draft', JSON.stringify(Object.assign({ at: Date.now() }, Object.fromEntries(DRAFT.map((k) => [k, S[k]]))))); }
 const draft = !tabId ? readJSON('tab-draft', null) : null;
 const STEPS = { photo: 0, review: 1, people: 2 };
+// Each entry also counts how deep into setup it is, so the Back button knows whether the entry
+// before it is a setup step (go back to it) or somewhere else (step back without leaving the site).
 function go(step, push = true) {
   S.step = step;
-  if (push) history.pushState({ step }, '');
+  if (push) history.pushState({ step, depth: ((history.state && history.state.depth) || 0) + 1 }, '');
   saveDraft(); renderStart(); window.scrollTo(0, 0);
 }
 
@@ -175,6 +177,7 @@ function renderStart() {
   $('#subtitle').textContent = '';
   $('#meBtn').hidden = true;
   $('#newBtn').hidden = true;
+  $('#backBtn').hidden = S.step === 'photo';
   $('#dock').hidden = true;
   if (S.step === 'review') return renderReview();
   if (S.step === 'people') return renderPeople();
@@ -578,6 +581,7 @@ async function poll(full) {
 function renderMissing(msg) {
   app.innerHTML = `<h1>Tab not found</h1><p class="lede">${esc(msg || 'Check the link.')}</p><a class="btn" href="/">Start a new tab</a>`;
   $('#dock').hidden = true;
+  $('#backBtn').hidden = false;
 }
 
 /* ---------- Rendering a tab ---------- */
@@ -592,7 +596,8 @@ function renderAll() {
   // Checks and highlights take the colour of whoever the taps are for.
   const target = mp ? T.people[who()] : null;
   document.documentElement.style.setProperty('--me', target ? pc(target) : PALETTE[0]);
-  $('#newBtn').hidden = false; // the only way out of a tab in the home-screen app, which has no address bar
+  $('#newBtn').hidden = false;
+  $('#backBtn').hidden = false; // the home-screen app has no address bar, so the way back is on the page
   const btn = $('#meBtn');
   btn.hidden = !mp;
   if (mp) setHTML(btn, `${av(mp)}<span class="nm">${esc(mp.name)}${isHost ? ' · host' : ''}</span>`);
@@ -1305,6 +1310,22 @@ app.addEventListener('submit', async (e) => {
 });
 
 $('#meBtn').addEventListener('click', () => openSheet({ type: 'who' }));
+/* Back, on every screen but the start screen. Setup goes back a step (through history when the step
+   before is there, so the browser's own back stays in line). In a tab, it first finishes editing
+   someone's items, then leaves for the start screen, which lists your tabs. */
+const PREV = { review: 'photo', people: 'review' };
+$('#backBtn').addEventListener('click', () => {
+  if (sheet) { closeSheet(); return; }
+  if (!tabId) {
+    const prev = PREV[S.step];
+    if (!prev) return;
+    if (((history.state && history.state.depth) || 0) > 0) history.back();
+    else { history.replaceState({ step: prev, depth: 0 }, ''); go(prev, false); }
+    return;
+  }
+  if (T && editFor && T.people[editFor]) { editDone(); return; }
+  location.href = '/';
+});
 $('#dockIn').addEventListener('click', (e) => {
   if (!tabId) { startClick(e); return; } // setup steps keep their next step in the dock
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1400,7 +1421,7 @@ async function start() {
     // A reload keeps the step (it's in history); a fresh visit starts at the top and offers the draft.
     const step = history.state && history.state.step;
     if (step && hasDraft(draft)) { Object.assign(S, draft); S.step = STEPS[step] != null ? step : 'photo'; }
-    else history.replaceState({ step: 'photo' }, '');
+    else history.replaceState({ step: 'photo', depth: 0 }, '');
     renderStart();
     return;
   }

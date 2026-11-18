@@ -75,6 +75,15 @@ await step('start screen offers a photo or typing', async () => {
   await nick.click('[data-act="type"]');
   assert.equal(nick.w.document.querySelectorAll('.ie').length, 2);
 });
+await step('Back, in the header, steps back a screen and is hidden on the start screen', async () => {
+  assert.equal(nick.$('#backBtn').hidden, false, 'shown on Check the receipt');
+  await nick.click('#backBtn');
+  await nick.settle();
+  assert.match(nick.text('#app'), /Take a photo of the receipt/);
+  assert.equal(nick.$('#backBtn').hidden, true, 'hidden on the start screen');
+  await nick.click('[data-act="type"]');
+  assert.equal(nick.w.document.querySelectorAll('.ie').length, 2, 'the lines are still there');
+});
 await step('typing the Wild Tomato receipt shows tax, fees and tip as the difference', async () => {
   for (let k = 2; k < WILD.length; k++) await nick.click('[data-act="addline"]');
   const rows = nick.w.document.querySelectorAll('.ie');
@@ -108,6 +117,9 @@ await step('adding people and creating the tab makes Nick the host', async () =>
   assert.equal(raw().charge, 18009);
   assert.equal(raw().payer.venmo, 'nick-szambelan');
   assert.match(nick.text('#app'), /People/);
+});
+await step('Back is on the tab screen too', async () => {
+  assert.equal(nick.$('#backBtn').hidden, false);
 });
 await step('Nick claims his own items and adds Ben’s for him', async () => {
   await nick.click('[data-act="view"][data-v="items"]');

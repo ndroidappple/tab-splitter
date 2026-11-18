@@ -58,6 +58,9 @@ button,a{-webkit-tap-highlight-color:transparent}
 .brand{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
 .brand strong{font-size:18px;font-weight:800;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brand span{font-size:13.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Back: on every screen but the start screen, since the home-screen app has no browser bar. */
+.back-btn{flex:none;width:40px;height:40px;margin-left:-6px;margin-right:-4px;border:0;border-radius:50%;background:none;color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+.back-btn:active{background:color-mix(in srgb,var(--ink) 8%,transparent)}
 .chip-btn{display:inline-flex;align-items:center;gap:8px;max-width:50%;border:0;background:var(--card);box-shadow:var(--shadow);border-radius:999px;padding:4px 14px 4px 4px;min-height:40px;font-weight:650;font-size:14px;cursor:pointer}
 .new-btn{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--accent-soft);color:var(--accent-text);font-weight:700;font-size:14px;text-decoration:none;white-space:nowrap}
 .new-btn span{font-size:19px;line-height:1;font-weight:600;margin-top:-2px}
@@ -369,8 +372,8 @@ dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 /* Presses: a finger going down lands almost at once; letting go springs back on the pop spring,
    so a tap reads as a press and a release. Rows and cards shade instead of shrinking. */
-:is(.btn,.chip-btn,.name-btn,.who-chip,.tick,.mini,.slot,.x,.link,.chip button,.seg button,.stepper button,.photo-btn,.path){transition:transform var(--pop-ms) var(--pop),background-color 140ms,color 140ms,box-shadow 160ms}
-:is(.chip-btn,.who-chip,.tick,.mini,.slot,.x,.chip button,.seg button,.stepper button):active:not(:disabled){transform:scale(.94);transition-duration:70ms;transition-timing-function:ease-out}
+:is(.btn,.back-btn,.chip-btn,.name-btn,.who-chip,.tick,.mini,.slot,.x,.link,.chip button,.seg button,.stepper button,.photo-btn,.path){transition:transform var(--pop-ms) var(--pop),background-color 140ms,color 140ms,box-shadow 160ms}
+:is(.back-btn,.chip-btn,.who-chip,.tick,.mini,.slot,.x,.chip button,.seg button,.stepper button):active:not(:disabled){transform:scale(.94);transition-duration:70ms;transition-timing-function:ease-out}
 :is(.btn,.name-btn,.photo-btn,.path):active:not(:disabled){transform:scale(.97);transition-duration:70ms;transition-timing-function:ease-out}
 .link:active{opacity:.6}
 :is(.r-main,.pc-head,.list-row,.choice,.switch){transition:background-color 180ms,box-shadow 160ms}
@@ -381,6 +384,7 @@ dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 <body>
 <header class="top">
   <div class="top-in">
+    <button id="backBtn" class="back-btn" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="brand"><strong id="title">Splitty</strong><span id="subtitle" class="money"></span></div>
     <a id="newBtn" class="new-btn" href="/" hidden aria-label="Start a new tab"><span aria-hidden="true">+</span><b>New tab</b></a>
     <button id="meBtn" class="chip-btn" type="button" hidden></button>
