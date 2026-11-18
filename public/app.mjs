@@ -284,15 +284,17 @@ function renderReview() {
     <h1>Check the receipt</h1>
     <p class="lede">${S.receipt ? 'Fix anything that doesn’t match the paper.' : 'Add each line from the receipt.'}</p>
     ${S.photo ? `<button type="button" class="photo-btn" data-act="photo"><img src="${S.photo}" alt=""><span><b>See the receipt</b><small class="muted">Tap to compare</small></span>${CHEV}</button>` : ''}
+    <div class="card totals">
+      <label class="f" for="charge" style="margin-top:0">Total charged to the card, with tip</label>
+      <div class="adorn big"><span aria-hidden="true">$</span><input id="charge" class="in money" inputmode="decimal" value="${esc(S.charge)}" placeholder="0.00" autocomplete="off"></div>
+      ${notes.map((n) => `<p class="note">${esc(n)}</p>`).join('')}
+      <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
+    </div>
     <label class="f" for="tTitle">Name this tab</label>
     <input id="tTitle" class="in" value="${esc(S.title)}" placeholder="Friday dinner" maxlength="60" autocomplete="off">
     <h2>Items</h2>
     <div class="items-edit" id="itemsEdit">${S.items.map(itemRow).join('')}</div>
     <button type="button" class="btn ghost wide add-line" data-act="addline">+ Add a line</button>
-    <label class="f" for="charge">Total charged to the card, with tip</label>
-    <div class="adorn big"><span aria-hidden="true">$</span><input id="charge" class="in money" inputmode="decimal" value="${esc(S.charge)}" placeholder="0.00" autocomplete="off"></div>
-    ${notes.map((n) => `<p class="note">${esc(n)}</p>`).join('')}
-    <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
     <div class="sh-foot"><button type="button" class="btn wide" data-act="toPeople">Next: who was there</button>
     <button type="button" class="link" data-act="restart">Start over</button></div>`;
 }
