@@ -311,9 +311,11 @@ details.more-ways[open] > summary::before{content:'− '}
    button's own edge, with a warm bloom that follows it. No ring is drawn the rest of the way round, so it
    reads as light on the edge, not a border. The gradient sits on the pseudo-elements themselves: that is
    where --glow-a spins (a gradient built on the button would freeze at 0deg). app.mjs syncs every glow to
-   one clock (--glow-t), so a re-rendered dock doesn't restart it. Reduce Motion holds it still. */
+   one clock (--glow-t), so a re-rendered dock doesn't restart it. Reduce Motion holds it still.
+   The button is deliberately not its own stacking context (no isolation), so the bloom (z-index -1) sits
+   behind the button's fill and only shows outside its edge: the light stays on the border, not the face. */
 @property --glow-a{syntax:'<angle>';inherits:false;initial-value:0deg}
-.glow{position:relative;isolation:isolate;--glow-1:#FF9A4D;--glow-2:#FFD37A}
+.glow{position:relative;--glow-1:#FF9A4D;--glow-2:#FFD37A}
 .glow::before,.glow::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:conic-gradient(from var(--glow-a),transparent 0 52%,color-mix(in srgb,var(--glow-1) 55%,transparent) 68%,var(--glow-2) 80%,color-mix(in srgb,var(--glow-1) 55%,transparent) 90%,transparent 98%);
   animation:glow-spin 3.2s linear infinite;animation-delay:var(--glow-t,0ms)}
