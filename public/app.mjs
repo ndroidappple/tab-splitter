@@ -96,10 +96,10 @@ const PAY = {
 };
 const wayName = (how) => (PAY[how] ? PAY[how].name : 'payment');
 // The fields for each way, in the setup step and in the host's settings.
-function payField(k, v) {
+function payField(k, v, pre = '', label = PAY[k].field) {
   const w = PAY[k];
-  return `<label class="f" for="${k}">${w.field}</label>
-    <div class="adorn">${w.pre ? `<span aria-hidden="true">${w.pre}</span>` : ''}<input id="${k}" class="in" value="${esc(v || '')}" placeholder="${w.ph}" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="80" ${k === 'zelle' ? 'inputmode="email"' : ''}></div>`;
+  return `<label class="f" for="${pre}${k}">${label}</label>
+    <div class="adorn">${w.pre ? `<span aria-hidden="true">${w.pre}</span>` : ''}<input id="${pre}${k}" class="in" value="${esc(v || '')}" placeholder="${w.ph}" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="80" ${k === 'zelle' ? 'inputmode="email"' : ''}></div>`;
 }
 
 /* ---------- Where we are ---------- */
@@ -112,6 +112,8 @@ if (tabId && location.hash.startsWith('#h=')) {
 }
 let hostKey = tabId ? store.get('tab-host:' + tabId) : null;
 let isHost = false;
+const paidIt = () => me === HOST; // this phone is the person who paid (the host may be setting it up for them)
+const payerYou = (you, them = esc(T.payer.name)) => (paidIt() ? you : them);
 let me = tabId ? store.get('tab-me:' + tabId) : null;
 const linkPerson = new URLSearchParams(location.search).get('p');
 
@@ -122,7 +124,7 @@ if (!DEVICE || !/^[a-z0-9]{4,24}$/.test(DEVICE)) { DEVICE = Math.random().toStri
 function rememberTab() {
   if (!T || !me) return;
   const list = readJSON('tab-recent', []).filter((x) => x && x.id !== tabId);
-  list.unshift({ id: tabId, title: T.title || 'Tab', charge: T.charge, host: isHost, t: T.created || Date.now() });
+  list.unshift({ id: tabId, title: T.title || 'Tab', charge: T.charge, host: paidIt(), payer: isHost && !paidIt() ? T.payer.name : undefined, t: T.created || Date.now() });
   store.set('tab-recent', JSON.stringify(list.slice(0, 8)));
 }
 
@@ -153,8 +155,9 @@ const S = {
   step: 'photo', title: '', items: [], charge: '', receipt: null, check: null, scan: null, busy: false, photo: null,
   hostName: profile.name || '', venmo: profile.venmo || '', cashapp: profile.cashapp || '', paypal: profile.paypal || '', zelle: profile.zelle || '',
   private: !!profile.private, people: [], mode: 'items',
+  paidBy: 'me', payer: { name: '', venmo: '', cashapp: '', paypal: '', zelle: '' }, // payer is used when someone else paid
 };
-const DRAFT = ['title', 'items', 'charge', 'receipt', 'check', 'scan', 'hostName', ...WAYS, 'private', 'people', 'mode'];
+const DRAFT = ['title', 'items', 'charge', 'receipt', 'check', 'scan', 'hostName', ...WAYS, 'private', 'people', 'mode', 'paidBy', 'payer'];
 const hasDraft = (d) => d && ((d.items || []).some((it) => it.name || it.price) || (d.people || []).length);
 function saveDraft() { store.set('tab-draft', JSON.stringify(Object.assign({ at: Date.now() }, Object.fromEntries(DRAFT.map((k) => [k, S[k]]))))); }
 const draft = !tabId ? readJSON('tab-draft', null) : null;
@@ -193,7 +196,7 @@ function renderStart() {
       <li><span><b>Say who had what,</b> or send the link and let everyone tap their own.</span></li>
       <li><span><b>Get paid back</b> on Venmo, Cash App, PayPal or Zelle.</span></li>
     </ol>
-    ${recent.length ? `<h2 class="group">Your tabs</h2><div class="rows">${recent.map((x) => `<a class="list-row" href="/t/${x.id}"><span class="grow"><b>${esc(x.title)}</b><small class="muted">${new Date(x.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${fmt(x.charge || 0)}${x.host ? ' · you paid' : ''}</small></span>${CHEV}</a>`).join('')}</div>` : ''}`;
+    ${recent.length ? `<h2 class="group">Your tabs</h2><div class="rows">${recent.map((x) => `<a class="list-row" href="/t/${x.id}"><span class="grow"><b>${esc(x.title)}</b><small class="muted">${new Date(x.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${fmt(x.charge || 0)}${x.host ? ' · you paid' : x.payer ? ` · ${esc(x.payer)} paid` : ''}</small></span>${CHEV}</a>`).join('')}</div>` : ''}`;
   $('#photo').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) scanPhoto(f); });
 }
 
@@ -268,7 +271,7 @@ function renderReview() {
     <h2>Items</h2>
     <div class="items-edit" id="itemsEdit">${S.items.map(itemRow).join('')}</div>
     <button type="button" class="btn ghost wide add-line" data-act="addline">+ Add a line</button>
-    <label class="f" for="charge">Total charged to your card, with tip</label>
+    <label class="f" for="charge">Total charged to the card, with tip</label>
     <div class="adorn big"><span aria-hidden="true">$</span><input id="charge" class="in money" inputmode="decimal" value="${esc(S.charge)}" placeholder="0.00" autocomplete="off"></div>
     ${notes.map((n) => `<p class="note">${esc(n)}</p>`).join('')}
     <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
@@ -284,16 +287,30 @@ const itemRow = (it, k) => `<div class="ie" data-k="${k}">
   </div></div>`;
 
 function renderPeople() {
-  const extra = WAYS.slice(1).some((k) => S[k]);
+  const other = S.paidBy === 'other';
+  const extra = WAYS.slice(1).some((k) => (other ? S.payer[k] : S[k]));
+  const ways = other
+    ? `${payField('venmo', S.payer.venmo, 'p_', 'Their Venmo username')}
+      <details class="more-ways" ${extra ? 'open' : ''}><summary>Cash App, PayPal or Zelle</summary>${WAYS.slice(1).map((k) => payField(k, S.payer[k], 'p_', `Their ${PAY[k].field}`)).join('')}</details>`
+    : `${payField('venmo', S.venmo)}
+      <details class="more-ways" ${extra ? 'open' : ''}><summary>Cash App, PayPal or Zelle</summary>${WAYS.slice(1).map((k) => payField(k, S[k])).join('')}</details>`;
+  const you = `<label class="f" for="hostName" style="margin-top:0">Your name</label><input id="hostName" class="in" value="${esc(S.hostName)}" maxlength="24" autocomplete="given-name" placeholder="Your name">`;
   app.innerHTML = `
     ${stepTag(2)}
     <h1>Who was there?</h1>
     <p class="lede">Add everyone, including anyone who already left. You can assign their items next, or send them the link.</p>
-    <div class="card">
-      <label class="f" for="hostName" style="margin-top:0">Your name</label><input id="hostName" class="in" value="${esc(S.hostName)}" maxlength="24" autocomplete="given-name" placeholder="Your name">
-      ${payField('venmo', S.venmo)}
-      <details class="more-ways" ${extra ? 'open' : ''}><summary>Cash App, PayPal or Zelle</summary>${WAYS.slice(1).map((k) => payField(k, S[k])).join('')}</details>
+    <h2 style="margin-top:0">Who paid the bill?</h2>
+    <div class="choices" role="radiogroup">
+      <label class="choice"><input type="radio" name="paidBy" value="me" ${other ? '' : 'checked'}><span><b>I did</b><span>Everyone pays you back.</span></span></label>
+      <label class="choice"><input type="radio" name="paidBy" value="other" ${other ? 'checked' : ''}><span><b>Someone else</b><span>You’re setting it up for them. Everyone, you included, pays them back.</span></span></label>
     </div>
+    ${other ? `<div class="card" style="margin-top:14px">
+      <label class="f" for="payerName" style="margin-top:0">Who paid</label><input id="payerName" class="in" value="${esc(S.payer.name)}" maxlength="24" autocomplete="off" autocapitalize="words" placeholder="Their name">
+      ${ways}
+    </div>
+    <div class="card">${you}</div>` : `<div class="card" style="margin-top:14px">${you}
+      ${ways}
+    </div>`}
     <label class="f" for="addName">Everyone else</label>
     <form id="addForm" class="row2" autocomplete="off"><input id="addName" class="in" placeholder="Name (or several, with commas)" maxlength="200" enterkeyhint="done" autocapitalize="words"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>
     <div class="chips" id="chips">${S.people.map((n, k) => `<span class="chip">${av({ name: n, color: k + 1 })}${esc(n)}<button type="button" data-act="delname" data-k="${k}" aria-label="Remove ${esc(n)}">×</button></span>`).join('')}</div>
@@ -315,7 +332,7 @@ function renderPeople() {
 
 // The field already shows @ or $, so a typed one is dropped.
 function dropPrefix(e) {
-  const k = e.target.id, w = PAY[k];
+  const k = e.target.id.replace(/^p_/, ''), w = PAY[k];
   if (w && (k === 'venmo' || k === 'cashapp') && e.target.value.startsWith(w.pre)) e.target.value = e.target.value.slice(1);
 }
 document.addEventListener('input', dropPrefix, true);
@@ -327,12 +344,15 @@ app.addEventListener('input', (e) => {
   if (e.target.id === 'tTitle') S.title = e.target.value;
   if (e.target.id === 'hostName') S.hostName = e.target.value;
   if (WAYS.includes(e.target.id)) S[e.target.id] = e.target.value;
+  if (e.target.id === 'payerName') S.payer.name = e.target.value;
+  if (e.target.id.startsWith('p_') && WAYS.includes(e.target.id.slice(2))) S.payer[e.target.id.slice(2)] = e.target.value;
   if (e.target.name === 'mode') S.mode = e.target.value;
   if (e.target.id === 'private') S.private = e.target.checked;
   saveDraft();
 });
 app.addEventListener('change', (e) => {
   if (tabId) return;
+  if (e.target.name === 'paidBy') { if (S.paidBy !== e.target.value) { S.paidBy = e.target.value; saveDraft(); renderPeople(); } return; }
   if (e.target.name === 'mode') S.mode = e.target.value;
   if (e.target.id === 'private') S.private = e.target.checked;
   saveDraft();
@@ -356,17 +376,22 @@ async function createTab() {
   let items;
   try { items = validItems(); } catch (e) { toast(e.message); return; }
   const charge = toCents(S.charge);
-  if (!Number.isInteger(charge) || charge <= 0) { toast('Enter what your card was charged'); go('review'); return; }
+  if (!Number.isInteger(charge) || charge <= 0) { toast('Enter what the card was charged'); go('review'); return; }
+  const other = S.paidBy === 'other';
+  if (other && !S.payer.name.trim()) { toast('Enter who paid'); $('#payerName').focus(); return; }
   if (!S.hostName.trim()) { toast('Enter your name'); $('#hostName').focus(); return; }
+  if (other && S.payer.name.trim().toLowerCase() === S.hostName.trim().toLowerCase()) { toast('If you paid, pick “I did”'); return; }
   const btn = app.querySelector('[data-act="create"]'); btn.disabled = true;
   try {
     const title = S.title.trim() || `Tab · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    const ways = Object.fromEntries(WAYS.map((k) => [k, S[k].trim()]));
-    const d = await post({ op: 'create', title, hostName: S.hostName.trim(), ...ways, items, charge, people: S.people, mode: S.mode, private: S.private, device: DEVICE, scan: S.scan || 'typed' });
-    store.set('tab-profile', JSON.stringify({ name: S.hostName.trim(), ...ways, private: S.private }));
+    const mine = Object.fromEntries(WAYS.map((k) => [k, S[k].trim()]));
+    const payer = other ? { hostName: S.payer.name.trim(), ...Object.fromEntries(WAYS.map((k) => [k, S.payer[k].trim()])), organizer: S.hostName.trim() } : { hostName: S.hostName.trim(), ...mine };
+    const d = await post({ op: 'create', title, ...payer, items, charge, people: S.people, mode: S.mode, private: S.private, device: DEVICE, scan: S.scan || 'typed' });
+    // Your profile stays yours, even when the tab is for someone else.
+    store.set('tab-profile', JSON.stringify({ name: S.hostName.trim(), ...mine, private: S.private }));
     store.set('tab-draft', null);
-    tabId = d.id; hostKey = d.hostKey; me = HOST; isHost = true;
-    store.set('tab-host:' + tabId, hostKey); store.set('tab-me:' + tabId, HOST);
+    tabId = d.id; hostKey = d.hostKey; me = d.state.organizer || HOST; isHost = true;
+    store.set('tab-host:' + tabId, hostKey); store.set('tab-me:' + tabId, me);
     history.pushState(null, '', '/t/' + tabId);
     T = d.state; view = 'people';
     rememberTab();
@@ -385,7 +410,7 @@ app.addEventListener('click', (e) => {
   if (a === 'photo') openSheet({ type: 'photo' });
   if (a === 'addline') { S.items.push({ name: '', qty: 1, price: '' }); saveDraft(); renderStart(); const ins = app.querySelectorAll('.ie'); ins[ins.length - 1].querySelector('input').focus(); }
   if (a === 'delline') { S.items.splice(Number(b.dataset.k), 1); saveDraft(); renderStart(); }
-  if (a === 'toPeople') { try { validItems(); } catch (err) { toast(err.message); return; } const c = toCents(S.charge); if (!Number.isInteger(c) || c <= 0) { toast('Enter what your card was charged'); $('#charge').focus(); return; } go('people'); }
+  if (a === 'toPeople') { try { validItems(); } catch (err) { toast(err.message); return; } const c = toCents(S.charge); if (!Number.isInteger(c) || c <= 0) { toast('Enter what the card was charged'); $('#charge').focus(); return; } go('people'); }
   if (a === 'restart') {
     const was = JSON.stringify(S);
     Object.assign(S, { items: [], charge: '', receipt: null, check: null, scan: null, title: '', photo: null });
@@ -520,7 +545,7 @@ async function poll(full) {
     if (r.status === 404) {
       if (hostKey && !T) {
         // A tab started on a preview: bring it over once, using the host key.
-        try { const m = await post({ op: 'import', t: tabId, key: hostKey }); isHost = true; me = HOST; store.set('tab-me:' + tabId, HOST); view = 'people'; accept(m.state); toast('Your tab is on the live site now. Share the new link.'); return; } catch (e) { /* not importable */ }
+        try { const m = await post({ op: 'import', t: tabId, key: hostKey }); isHost = true; me = m.state.organizer || HOST; store.set('tab-me:' + tabId, me); view = 'people'; accept(m.state); toast('Your tab is on the live site now. Share the new link.'); return; } catch (e) { /* not importable */ }
       }
       renderMissing(d.error); return;
     }
@@ -727,10 +752,10 @@ function summaryCard(C) {
   const owed = others.reduce((s, r) => s + (r.settled ? 0 : Math.max(0, r.owed)), 0);
   const open = Math.max(0, C.pool);
   const back = Math.max(0, T.charge - yours);
-  const parts = [['paid', 'Paid back', paid], ['owed', 'Owed', owed], ['open', 'Not claimed', open], ['yours', isHost ? 'Your share' : `${T.payer.name}’s share`, yours]].filter((x) => x[2] > SLACK);
+  const parts = [['paid', 'Paid back', paid], ['owed', 'Owed', owed], ['open', 'Not claimed', open], ['yours', paidIt() ? 'Your share' : `${T.payer.name}’s share`, yours]].filter((x) => x[2] > SLACK);
   const sum = Math.max(T.charge, parts.reduce((s, x) => s + x[2], 0)) || 1;
   return `<div class="card summary">
-    <p class="eyebrow">${isHost ? 'Paid back to you' : `Paid back to ${esc(T.payer.name)}`}</p>
+    <p class="eyebrow">${paidIt() ? 'Paid back to you' : `Paid back to ${esc(T.payer.name)}`}</p>
     <p class="big-num money">${fmt(paid)} <span class="muted">of ${fmt(back)}</span></p>
     <div class="stack-bar" aria-hidden="true">${parts.map(([k, , v]) => `<i class="${k}" style="width:${(v / sum) * 100}%"></i>`).join('')}</div>
     <ul class="legend">${parts.map(([k, label, v]) => `<li><i class="${k}"></i>${label} <b class="money">${fmt(v)}</b></li>`).join('')}</ul></div>`;
@@ -743,7 +768,7 @@ function peoplePanel(C) {
   if (C.openItems.length || Math.abs(C.pool) > SLACK) {
     const n = C.openItems.length;
     html += `<div class="card open-card"><div class="card-h"><h3>${n ? `${plural(n, 'item')} not claimed yet` : 'Not covered yet'}</h3><b class="money">${fmt(C.pool)}</b></div>
-      <p class="note" style="margin-top:0">${isHost ? 'Assign them, or once everyone’s had a look, split what’s left or cover it.' : `If you had one of these, claim it. Until then ${esc(T.payer.name)} is covering it.`}</p>`;
+      <p class="note" style="margin-top:0">${isHost ? `Assign them, or once everyone’s had a look, split what’s left or ${payerYou('cover it', `have ${esc(T.payer.name)} cover it`)}.` : `If you had one of these, claim it. Until then ${esc(T.payer.name)} is covering it.`}</p>`;
     if (n) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
@@ -753,11 +778,11 @@ function peoplePanel(C) {
     }
     if (!T.closed && isHost) {
       html += `<div class="acts"><button type="button" class="btn sm ghost" data-act="pool" data-v="spread">Split across everyone who hasn’t paid</button>
-        <button type="button" class="btn sm ghost" data-act="pool" data-v="cover">I’ll cover it</button></div>`;
+        <button type="button" class="btn sm ghost" data-act="pool" data-v="cover">${payerYou('I’ll cover it', `${esc(T.payer.name)} covers it`)}</button></div>`;
     }
     html += '</div>';
   } else if (T.pool) {
-    html += `<p class="banner ok">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : `${isHost ? 'You’re' : esc(T.payer.name) + ' is'} covering anything unclaimed.`}${isHost ? ' <button type="button" class="link" data-act="pool" data-v="none">Undo</button>' : ''}</p>`;
+    html += `<p class="banner ok">${T.pool === 'spread' ? 'Anything unclaimed is split across everyone who hasn’t paid.' : `${payerYou('You’re', esc(T.payer.name) + ' is')} covering anything unclaimed.`}${isHost ? ' <button type="button" class="link" data-act="pool" data-v="none">Undo</button>' : ''}</p>`;
   }
 
   html += `<h2 class="group">People <span class="count">${others.length + 1}</span></h2>
@@ -771,8 +796,8 @@ function peoplePanel(C) {
   const row = (a, label, sub = '') => `<button type="button" class="list-row" data-act="${a}"><span class="grow"><b>${label}</b>${sub ? `<small class="muted">${sub}</small>` : ''}</span>${CHEV}</button>`;
   html += `<h2 class="group">Tab</h2><div class="rows">
     ${row('share', 'Share the link', 'Everyone taps their name and picks what they had')}
-    ${owing && !T.closed ? row('remindall', 'Nudge the group', `${plural(owing, 'person owes', 'people owe')} you`) : ''}
-    ${row('settings', 'Tab settings', 'Name, ways to pay you, privacy')}
+    ${owing && !T.closed ? row('remindall', 'Nudge the group', `${plural(owing, 'person owes', 'people owe')} ${payerYou('you')}`) : ''}
+    ${row('settings', 'Tab settings', `Name, ways to pay ${payerYou('you')}, privacy`)}
     ${row('report', 'See the report')}
     ${/^deploy-preview-/.test(location.hostname) ? `<a class="list-row" href="${LIVE}/t/${tabId}#h=${encodeURIComponent(hostKey)}"><span class="grow"><b>Open on the live site</b></span>${CHEV}</a>` : ''}
     ${T.closed ? row('reopen', 'Reopen the tab') : row('close', 'Close the tab', allDone ? 'Everyone’s square' : 'Best once everyone has paid and nothing is left uncovered')}</div>`;
@@ -797,12 +822,13 @@ function personCard(r) {
     if (p.id !== HOST && p.paid != null && !p.ok) acts += `<button type="button" class="btn sm" data-act="confirm" data-p="${p.id}">Confirm ${fmt(p.paid)}</button>`;
     else if (p.id !== HOST && owes) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind</button>`;
     acts += `<button type="button" class="btn sm ghost" data-act="editfor" data-p="${p.id}">${p.id === me ? 'Edit my items' : 'Edit items'}</button>`;
+    if (p.id === me && !paidIt() && owes) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
     if (p.id !== HOST) {
       if (p.paid != null && !p.ok && owes) more += `<button type="button" class="btn sm ghost" data-act="remind" data-p="${p.id}">Remind</button>`;
       if (owes) more += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;
       if (p.paid != null && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="waive" data-p="${p.id}">Let the ${fmt(r.owed)} go</button>`;
       if (p.paid != null) more += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${p.id}">Undo payment</button>`;
-      more += `<button type="button" class="btn sm danger" data-act="remove" data-p="${p.id}">Remove ${esc(p.name)}</button>`;
+      if (p.id !== T.organizer) more += `<button type="button" class="btn sm danger" data-act="remove" data-p="${p.id}">Remove ${esc(p.name)}</button>`;
     }
   }
   const n = r.lines.length;
@@ -1058,7 +1084,7 @@ function renderSheet(C) {
       <p class="sub">How do you want to fill it in?</p>
       <div class="paths">
         <button type="button" class="path" data-act="go-assign"><b>I know who had what</b><span>Assign the items yourself, then send each person their total.</span>${CHEV}</button>
-        <button type="button" class="path" data-act="share"><b>Send the link</b><span>Everyone taps their name, picks what they had and pays you.</span>${CHEV}</button>
+        <button type="button" class="path" data-act="share"><b>Send the link</b><span>Everyone taps their name, picks what they had and pays ${payerYou('you')}.</span>${CHEV}</button>
       </div>
       <p class="note">You can mix both: assign what you know, then share the link for the rest.</p>
       <div class="sh-foot">${done('Not now')}<button type="button" class="link" data-act="copyhost">Copy your host link</button></div>
@@ -1072,7 +1098,7 @@ function renderSheet(C) {
     b.innerHTML = `<div class="sh"><h2 id="sheetTitle">Tab settings</h2>
       <form id="settingsForm" autocomplete="off">
       <label class="f" for="sTitle">Name of the tab</label><input id="sTitle" class="in" maxlength="60" value="${esc(T.title || '')}">
-      <h3 class="sheet-h">How friends pay you</h3>
+      <h3 class="sheet-h">How friends pay ${payerYou('you')}</h3>
       <p class="sub">Fill in any you use. Friends get a button for each.</p>
       ${WAYS.map((k) => payField(k, T.payer[k])).join('')}
       <label class="switch" style="margin-top:18px"><input type="checkbox" id="sPrivate" ${T.private ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span><b>Keep totals private</b><span>Friends see only their own total, not everyone’s.</span></span></label>
@@ -1180,7 +1206,7 @@ app.addEventListener('click', (e) => {
   if (a === 'editdone') { if (!editFor && !isHost) { view = 'items'; arrangement = null; renderAll(); window.scrollTo(0, 0); } else editDone(); return; }
   if (a === 'mine') { openSheet({ type: 'mine' }); return; }
   if (a === 'assign' && it) { view = 'items'; editFor = null; arrangement = null; renderAll(); openSheet({ type: 'item', i: it.id }); return; }
-  if (a === 'pool') act({ op: 'setup', pool: b.dataset.v === 'none' ? null : b.dataset.v }, b.dataset.v === 'spread' ? 'Split across everyone who hasn’t paid' : b.dataset.v === 'cover' ? 'You’re covering it' : 'Undone');
+  if (a === 'pool') act({ op: 'setup', pool: b.dataset.v === 'none' ? null : b.dataset.v }, b.dataset.v === 'spread' ? 'Split across everyone who hasn’t paid' : b.dataset.v === 'cover' ? payerYou('You’re covering it', `${T.payer.name} is covering it`) : 'Undone');
   if (a === 'remind') remind(b.dataset.p);
   if (a === 'remindall') remindAll();
   if (a === 'markpaid') openSheet({ type: 'markpaid', p: b.dataset.p });
@@ -1316,8 +1342,9 @@ async function start() {
   }
   if (hostKey) {
     let missing = false;
-    try { const d = await post({ op: 'checkhost', t: tabId, key: hostKey }); isHost = !!d.isHost; } catch (e) { isHost = false; missing = e.status === 404; }
-    if (isHost) { me = HOST; store.set('tab-me:' + tabId, HOST); } else if (!missing) { hostKey = null; }
+    let organizer;
+    try { const d = await post({ op: 'checkhost', t: tabId, key: hostKey }); isHost = !!d.isHost; organizer = d.organizer; } catch (e) { isHost = false; missing = e.status === 404; }
+    if (isHost) { me = organizer || HOST; store.set('tab-me:' + tabId, me); } else if (!missing) { hostKey = null; }
   }
   if (isHost) view = 'people';
   await poll(true);

@@ -310,5 +310,56 @@ await step('once everyone has paid and nothing is uncovered, the totals add up t
   assert.match(nick2.text('#app'), /This tab is closed/);
 });
 
+// ---------- Nick sets up a tab for Phil, who paid ----------
+let philTab;
+const forPhil = await phone('/');
+await step('setting up a tab for someone else who paid', async () => {
+  await forPhil.click('[data-act="type"]');
+  const rows = forPhil.w.document.querySelectorAll('.ie');
+  await forPhil.type(rows[0].querySelector('[data-f="name"]'), 'Burger');
+  await forPhil.type(rows[0].querySelector('[data-f="price"]'), '20.00');
+  await forPhil.type(rows[1].querySelector('[data-f="name"]'), 'Salad');
+  await forPhil.type(rows[1].querySelector('[data-f="price"]'), '20.00');
+  await forPhil.type('#charge', '50.00');
+  await forPhil.click('[data-act="toPeople"]');
+  const other = forPhil.$('input[name="paidBy"][value="other"]');
+  other.checked = true; other.dispatchEvent(new forPhil.w.Event('change', { bubbles: true })); await tick(30);
+  await forPhil.type('#payerName', 'Phil');
+  await forPhil.type('#p_venmo', 'phil-v');
+  await forPhil.type('#hostName', 'Nick');
+  forPhil.$('#addName').value = 'Anna'; await forPhil.submit('#addForm');
+  assert.equal(forPhil.$('#payerName').value, 'Phil', 'the payer stays filled in after adding people');
+  await forPhil.click('[data-act="create"]');
+  philTab = forPhil.w.location.pathname.slice(3);
+  const T = store.raw(keyFor(philTab));
+  assert.equal(T.payer.name, 'Phil');
+  assert.equal(T.payer.venmo, 'phil-v');
+  const nickId = Object.entries(T.people).find(([, v]) => v.name === 'Nick')[0];
+  assert.equal(T.organizer, nickId);
+  assert.notEqual(nickId, HOST);
+  assert.equal(forPhil.w.localStorage.getItem('tab-me:' + philTab), nickId, 'this phone is Nick, not Phil');
+  assert.equal(JSON.parse(forPhil.w.localStorage.getItem('tab-profile')).name, 'Nick', 'Nick’s saved name stays his');
+  assert.equal(JSON.parse(forPhil.w.localStorage.getItem('tab-profile')).venmo, '', 'Phil’s Venmo isn’t saved as Nick’s');
+  const app = forPhil.text('#app');
+  assert.match(app, /Paid back to Phil/);
+  assert.doesNotMatch(app, /Paid back to you/);
+  assert.ok(!forPhil.$(`[data-act="remove"][data-p="${nickId}"]`), 'Nick can’t remove himself');
+});
+await step('Nick claims his own item and pays Phil from the host phone', async () => {
+  const T = store.raw(keyFor(philTab));
+  const nickId = T.organizer, burger = T.items.find((i) => i.name === 'Burger').id;
+  await handle(new Request('https://tab.test/api/tab', { method: 'POST', body: JSON.stringify({ t: philTab, op: 'slots', actor: nickId, key: forPhil.w.localStorage.getItem('tab-host:' + philTab), changes: [{ i: burger, p: nickId, a: 'take' }] }) }), store);
+  const after = store.raw(keyFor(philTab));
+  assert.ok(!(after.by[burger] || {})[nickId], 'not marked “added by Phil”');
+  assert.equal(compute(after).byId[nickId].total, 2500);
+});
+await step('reopening the tab on that phone keeps it as Nick', async () => {
+  const back = await phone('/t/' + philTab + '#h=' + forPhil.w.localStorage.getItem('tab-host:' + philTab));
+  await tick(100);
+  const T = store.raw(keyFor(philTab));
+  assert.equal(back.w.localStorage.getItem('tab-me:' + philTab), T.organizer);
+  assert.match(back.text('#app'), /Paid back to Phil/);
+});
+
 console.log(failures ? `\n${failures} failed` : '\nall page steps passed');
 process.exit(failures ? 1 : 0);

@@ -152,6 +152,12 @@ export function createTab(body, now) {
     slots: Object.fromEntries(items.map((it) => [it.id, Array.from({ length: it.qty }, () => [])])),
   };
   T.people[HOST] = { name: T.payer.name, color: 0, t: 0, by: 'self', paid: null, lock: null, ok: false, waived: 0 };
+  // Setting up a tab for someone else who paid: the payer is HOST (everyone pays them back), and the
+  // person setting it up joins as a regular person who owes their share, holding the host controls.
+  if (typeof body.organizer === 'string' && body.organizer.trim()) {
+    const { id } = addPerson(T, cleanName(body.organizer), now, 'self');
+    if (id !== HOST) T.organizer = id;
+  }
   const names = Array.isArray(body.people) ? body.people.slice(0, MAX_PEOPLE - 1) : [];
   for (const n of names) if (typeof n === 'string' && n.trim()) addPerson(T, cleanName(n), now, HOST);
   log(T, now, 'created', {
@@ -204,7 +210,8 @@ function phoneEvent(T, body, now) {
 
 function change(T, body, now, isHost) {
   const actor = typeof body.actor === 'string' && T.people[body.actor] ? body.actor : undefined;
-  const by = isHost ? HOST : actor;
+  // The host phone acts as whoever is on it: the payer, or the person who set the tab up for them.
+  const by = actor || (isHost ? HOST : undefined);
   const device = cleanDevice(body.device);
   const host = () => { if (!isHost) forbid(); };
   const selfOrHost = (p) => { if (!isHost && actor !== p) forbid('You can only change your own payment'); };
@@ -330,6 +337,7 @@ function change(T, body, now, isHost) {
     case 'remove': {
       host(); needPerson(T, body.p);
       if (body.p === HOST) bad('The host can’t be removed');
+      if (body.p === T.organizer) bad('You set up this tab, so you can’t be removed');
       delete T.people[body.p];
       for (const map of [T.claims, T.out, T.by]) for (const i of Object.keys(map)) { delete map[i][body.p]; pruneItem(T, i); }
       for (const i of Object.keys(T.slots || {})) T.slots[i] = T.slots[i].map((x) => x.filter((q) => q !== body.p));
@@ -465,7 +473,8 @@ export async function handle(req, store, now = () => Date.now(), previewStore = 
         if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);
         const cur = await read(store, body.t);
         if (!cur) throw new HttpError(404, NOT_FOUND);
-        return json({ isHost: typeof body.key === 'string' && hash(body.key) === cur.data.hostKeyHash });
+        const isHost = typeof body.key === 'string' && hash(body.key) === cur.data.hostKeyHash;
+        return json({ isHost, organizer: isHost ? cur.data.organizer : undefined });
       }
       if (!validId(body.t)) throw new HttpError(404, NOT_FOUND);
       const { data, result } = await mutate(store, body.t, (T) => apply(T, body, now()));
