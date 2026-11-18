@@ -164,9 +164,11 @@ const hasDraft = (d) => d && ((d.items || []).some((it) => it.name || it.price) 
 function saveDraft() { store.set('tab-draft', JSON.stringify(Object.assign({ at: Date.now() }, Object.fromEntries(DRAFT.map((k) => [k, S[k]]))))); }
 const draft = !tabId ? readJSON('tab-draft', null) : null;
 const STEPS = { photo: 0, review: 1, people: 2 };
+// Each entry also counts how deep into setup it is, so the Back button knows whether the entry
+// before it is a setup step (go back to it) or somewhere else (step back without leaving the site).
 function go(step, push = true) {
   S.step = step;
-  if (push) history.pushState({ step }, '');
+  if (push) history.pushState({ step, depth: ((history.state && history.state.depth) || 0) + 1 }, '');
   saveDraft(); renderStart(); window.scrollTo(0, 0);
 }
 
@@ -175,6 +177,7 @@ function renderStart() {
   $('#subtitle').textContent = '';
   $('#meBtn').hidden = true;
   $('#newBtn').hidden = true;
+  $('#backBtn').hidden = S.step === 'photo';
   $('#dock').hidden = true;
   if (S.step === 'review') return renderReview();
   if (S.step === 'people') return renderPeople();
@@ -253,23 +256,25 @@ function reviewNumbers() {
   const rc = S.receipt;
   const inSub = rc && Array.isArray(rc.fees) ? rc.fees.filter((f) => f.listed_with_items).reduce((s, f) => s + Math.round(f.amount * 100), 0) : 0;
   const printed = rc ? Math.round(((rc.subtotal ?? rc.total) || 0) * 100) : null;
-  return { sum, printed, inSub, charge: toCents(S.charge) };
+  return { sum, printed, inSub, sub: sum + inSub, charge: toCents(S.charge) };
 }
-// The items' sum and whether it matches the receipt live in the dock, so they stay in view while lines are fixed.
+// The subtotal (items plus any fee printed with them, like a restaurant surcharge) and whether it matches the
+// receipt live in the dock, so they stay in view while lines are fixed. The note under the card charge uses the
+// same subtotal, so the two numbers on screen always add up to the charge.
 function reviewDock() {
-  const n = reviewNumbers(), sum = n.sum + n.inSub;
+  const n = reviewNumbers(), sum = n.sub;
   const matched = n.printed && Math.abs(n.printed - n.inSub - n.sum) < 1;
   const note = matched ? '<small class="ok-text">✓ Matches the receipt</small>'
     : n.printed ? `<small class="warn-text money">Receipt says ${fmt(n.printed)}</small>` : '<small>Before tax and tip</small>';
-  showDock(`<div class="dock-sum" aria-live="polite"><span>Items add up to</span><strong class="money">${fmt(sum)}</strong>${note}</div>
+  showDock(`<div class="dock-sum" aria-live="polite"><span>Subtotal</span><strong class="money">${fmt(sum)}</strong>${note}</div>
     <button type="button" class="btn" data-act="toPeople">Next</button>`, 'review', sum);
 }
 function reviewStatus() {
   const n = reviewNumbers();
   const parts = [];
   if (Number.isFinite(n.charge) && n.charge > 0) {
-    if (n.charge < n.sum) parts.push(`<p class="banner warn">The card charge is less than the items. Check it.</p>`);
-    else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
+    if (n.charge < n.sub) parts.push(`<p class="banner warn">The card charge is less than the subtotal. Check it.</p>`);
+    else parts.push(`<p class="note money">${fmt(n.sub)} subtotal + ${fmt(n.charge - n.sub)} tax, fees and tip</p>`);
   }
   return parts.join('');
 }
@@ -576,6 +581,7 @@ async function poll(full) {
 function renderMissing(msg) {
   app.innerHTML = `<h1>Tab not found</h1><p class="lede">${esc(msg || 'Check the link.')}</p><a class="btn" href="/">Start a new tab</a>`;
   $('#dock').hidden = true;
+  $('#backBtn').hidden = false;
 }
 
 /* ---------- Rendering a tab ---------- */
@@ -590,7 +596,8 @@ function renderAll() {
   // Checks and highlights take the colour of whoever the taps are for.
   const target = mp ? T.people[who()] : null;
   document.documentElement.style.setProperty('--me', target ? pc(target) : PALETTE[0]);
-  $('#newBtn').hidden = false; // the only way out of a tab in the home-screen app, which has no address bar
+  $('#newBtn').hidden = false;
+  $('#backBtn').hidden = false; // the home-screen app has no address bar, so the way back is on the page
   const btn = $('#meBtn');
   btn.hidden = !mp;
   if (mp) setHTML(btn, `${av(mp)}<span class="nm">${esc(mp.name)}${isHost ? ' · host' : ''}</span>`);
@@ -858,8 +865,10 @@ function showDock(html, key, num) {
   $('#dock').hidden = false;
   setHTML($('#dockIn'), html);
   $('#dockIn').classList.toggle('bare', !html.includes('dock-sum'));
-  // Every glow spins on one clock, so a dock rebuilt mid-spin picks up where the last one was.
-  for (const g of $('#dockIn').querySelectorAll('.glow')) if (!g.style.getPropertyValue('--glow-t')) g.style.setProperty('--glow-t', `${-(performance.now() % 3600)}ms`);
+  // The dock's solid button is the next step on every screen, so it glows. Every glow spins on one clock,
+  // so a dock rebuilt mid-spin picks up where the last one was.
+  const g = $('#dockIn > .btn:not(.ghost)');
+  if (g && !g.classList.contains('glow')) { g.classList.add('glow'); g.style.setProperty('--glow-t', `${-(performance.now() % 3200)}ms`); }
   const el = $('#dockIn .dock-sum strong');
   const was = dockKey === key ? dockNum : null;
   dockKey = key; dockNum = num;
@@ -899,7 +908,7 @@ function renderDock(C) {
   } else {
     num = r.owed;
     left = `<span>${r.p.paid != null ? 'Still to pay' : 'Your total'}</span><strong class="money">${fmt(r.owed)}</strong><small>Tax and tip included</small>`;
-    right = T.closed ? '' : '<button type="button" class="btn glow" data-act="mine">Review and pay</button>';
+    right = T.closed ? '' : '<button type="button" class="btn" data-act="mine">Review and pay</button>';
   }
   showDock(`<div class="dock-sum" aria-live="polite">${left}</div>${right}`, 'p:' + me, num);
 }
@@ -1301,6 +1310,22 @@ app.addEventListener('submit', async (e) => {
 });
 
 $('#meBtn').addEventListener('click', () => openSheet({ type: 'who' }));
+/* Back, on every screen but the start screen. Setup goes back a step (through history when the step
+   before is there, so the browser's own back stays in line). In a tab, it first finishes editing
+   someone's items, then leaves for the start screen, which lists your tabs. */
+const PREV = { review: 'photo', people: 'review' };
+$('#backBtn').addEventListener('click', () => {
+  if (sheet) { closeSheet(); return; }
+  if (!tabId) {
+    const prev = PREV[S.step];
+    if (!prev) return;
+    if (((history.state && history.state.depth) || 0) > 0) history.back();
+    else { history.replaceState({ step: prev, depth: 0 }, ''); go(prev, false); }
+    return;
+  }
+  if (T && editFor && T.people[editFor]) { editDone(); return; }
+  location.href = '/';
+});
 $('#dockIn').addEventListener('click', (e) => {
   if (!tabId) { startClick(e); return; } // setup steps keep their next step in the dock
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1396,7 +1421,7 @@ async function start() {
     // A reload keeps the step (it's in history); a fresh visit starts at the top and offers the draft.
     const step = history.state && history.state.step;
     if (step && hasDraft(draft)) { Object.assign(S, draft); S.step = STEPS[step] != null ? step : 'photo'; }
-    else history.replaceState({ step: 'photo' }, '');
+    else history.replaceState({ step: 'photo', depth: 0 }, '');
     renderStart();
     return;
   }
