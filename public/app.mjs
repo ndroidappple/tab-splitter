@@ -924,8 +924,13 @@ function openSheet(s) {
   const fade = closing ? getComputedStyle(scrim).opacity : 0;
   if (closing) { closing = null; stopSheetMotion(); }
   sheet = s; b._h = null; renderSheet(sheetC());
-  if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
-  document.documentElement.style.overflow = 'hidden';
+  if (!dlg.open) {
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+    // Safari focuses the first button inside and scrolls to show it while the panel is still below the
+    // screen, which jolts the content mid-rise. Focus the panel itself and undo any such scroll before the first frame.
+    panel.focus({ preventScroll: true });
+    dlg.scrollTop = 0; sheetWrap.scrollTop = 0; b.scrollTop = 0;
+  }
   fitSheet();
   anim(panel, [{ transform: from }, { transform: 'translateY(0)' }], 'surface');
   anim(scrim, [{ opacity: fade }, { opacity: 1 }], 'enter');
@@ -947,7 +952,6 @@ function closeSheet(speed = 0) {
   const at = moving ? liveY(panel) : 0, scrim0 = moving ? getComputedStyle(scrim).opacity : 0; // mid-rise, mid-drag or at rest
   hold(panel, ['transform']); hold(scrim, ['opacity']);
   if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
-  document.documentElement.style.overflow = '';
   document.body.appendChild($('#toasts'));
   const done = () => {
     if (closing !== tok) return; // reopened meanwhile

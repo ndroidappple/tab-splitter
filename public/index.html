@@ -294,6 +294,12 @@ details.more-ways[open] > summary::before{content:'− '}
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */
 dialog.sheet{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;padding:0;background:transparent;color:var(--ink);overflow:hidden}
 dialog.sheet::backdrop{background:transparent}
+/* The page underneath stays put without toggling its overflow (which makes Safari resize its toolbar mid-rise):
+   the dim takes no scroll gestures, and scrolling inside the sheet never hands off to the page. */
+dialog.sheet,.sheet-panel,#sheetBody{overscroll-behavior:contain}
+.scrim{touch-action:none}
+dialog.sheet[open] .sheet-panel{will-change:transform}
+dialog.sheet[open] .scrim{will-change:opacity}
 .sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center}
 /* A closing sheet lets go of the page at once: the dialog is already closed and just finishing its slide, so taps go through. */
 dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
@@ -347,7 +353,7 @@ dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 <main class="wrap" id="app"><p class="muted" role="status">Loading…</p></main>
 <div class="dock" id="dock" hidden><div class="dock-in" id="dockIn"></div></div>
 <dialog id="sheet" class="sheet" aria-labelledby="sheetTitle"><div class="sheet-wrap" id="sheetWrap"><div class="scrim" id="scrim"></div>
-  <div class="sheet-panel" id="sheetPanel" tabindex="-1"><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div></dialog>
+  <div class="sheet-panel" id="sheetPanel" tabindex="-1" autofocus><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div></dialog>
 <div id="toasts" role="status" aria-live="polite"></div>
 <noscript><p style="padding:20px">This page needs JavaScript turned on.</p></noscript>
 <script type="module" src="/app.mjs"></script>
