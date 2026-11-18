@@ -102,15 +102,14 @@ await step('adding people and creating the tab makes Nick the host', async () =>
   tabId = m[1];
   hostKey = nick.w.localStorage.getItem('tab-host:' + tabId);
   assert.ok(hostKey);
-  assert.ok(nick.$('#sheet').hasAttribute('open'), 'the "your tab is ready" sheet opens');
-  assert.ok(nick.$('#sheetBody [data-act="go-assign"]') && nick.$('#sheetBody [data-act="share"]'), 'assign it yourself, or send the link');
+  assert.ok(!nick.$('#sheet').hasAttribute('open'), 'no chooser: the tab opens straight away');
+  assert.ok(nick.$('#dockIn [data-act="share"]'), 'sharing the link is one tap from the tab');
   assert.equal(nick.w.localStorage.getItem('tab-draft'), null, 'the draft is gone once the tab exists');
   assert.equal(raw().charge, 18009);
   assert.equal(raw().payer.venmo, 'nick-szambelan');
   assert.match(nick.text('#app'), /People/);
 });
 await step('Nick claims his own items and adds Ben’s for him', async () => {
-  await nick.click('[data-act="close-sheet"]');
   await nick.click('[data-act="view"][data-v="items"]');
   assert.match(nick.text('.assign'), /Tapping for you/);
   await nick.click(`[data-act="assignto"][data-p="${pid('Anna')}"]`);
@@ -170,7 +169,7 @@ await step('Anna sees the names Nick added and taps hers', async () => {
   assert.match(anna.text('#app'), /Who are you\?/);
   assert.match(anna.text('#app'), /Anna/);
   await anna.click(`[data-act="pick"][data-p="${pid('Anna')}"]`);
-  assert.match(anna.text('#app'), /Tap what you had/);
+  assert.match(anna.text('#dock'), /Tap what you had/);
 });
 await step('Anna claims her pizza and cider, and shares the curds with Nick', async () => {
   await anna.click(`[data-act="toggle"][data-i="${iid('Large Margherita')}"]`);
@@ -340,9 +339,8 @@ await step('setting up a tab for someone else who paid', async () => {
   assert.equal(forPhil.w.localStorage.getItem('tab-me:' + philTab), nickId, 'this phone is Nick, not Phil');
   assert.equal(JSON.parse(forPhil.w.localStorage.getItem('tab-profile')).name, 'Nick', 'Nick’s saved name stays his');
   assert.equal(JSON.parse(forPhil.w.localStorage.getItem('tab-profile')).venmo, '', 'Phil’s Venmo isn’t saved as Nick’s');
-  const app = forPhil.text('#app');
-  assert.match(app, /Paid back to Phil/);
-  assert.doesNotMatch(app, /Paid back to you/);
+  assert.match(forPhil.text('body'), /paid by Phil/);
+  assert.doesNotMatch(forPhil.text('body'), /Paid back to you/);
   assert.ok(!forPhil.$(`[data-act="remove"][data-p="${nickId}"]`), 'Nick can’t remove himself');
 });
 await step('Nick claims his own item and pays Phil from the host phone', async () => {
@@ -358,7 +356,8 @@ await step('reopening the tab on that phone keeps it as Nick', async () => {
   await tick(100);
   const T = store.raw(keyFor(philTab));
   assert.equal(back.w.localStorage.getItem('tab-me:' + philTab), T.organizer);
-  assert.match(back.text('#app'), /Paid back to Phil/);
+  assert.match(back.text('body'), /paid by Phil/);
+  assert.ok(!back.$(`[data-act="remind"][data-p="${T.organizer}"]`), 'no reminding yourself');
 });
 
 console.log(failures ? `\n${failures} failed` : '\nall page steps passed');

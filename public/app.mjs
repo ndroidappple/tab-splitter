@@ -167,11 +167,10 @@ function go(step, push = true) {
   if (push) history.pushState({ step }, '');
   saveDraft(); renderStart(); window.scrollTo(0, 0);
 }
-const stepTag = (n) => `<p class="eyebrow">Step ${n} of 3</p>`;
 
 function renderStart() {
   $('#title').textContent = 'Splitty';
-  $('#subtitle').textContent = 'Split the bill';
+  $('#subtitle').textContent = '';
   $('#meBtn').hidden = true;
   $('#newBtn').hidden = true;
   $('#dock').hidden = true;
@@ -182,7 +181,7 @@ function renderStart() {
   app.innerHTML = `
     <section class="hero">
       <h1>Split the bill<br>in a minute.</h1>
-      <p class="lede">Snap the receipt, tap who had what, and everyone pays you back with tax and tip worked out.</p>
+      <p class="lede">Snap the receipt. Everyone taps what they had and pays you back, tax and tip included.</p>
     </section>
     ${hasDraft(d) ? `<div class="card resume"><div><b>Pick up where you left off</b><span class="muted">${esc(d.title || 'Your last receipt')} · ${plural((d.items || []).filter((it) => it.name).length, 'item')}</span></div>
       <div class="row2"><button type="button" class="btn sm" data-act="resume">Continue</button><button type="button" class="btn sm ghost" data-act="discard">Discard</button></div></div>` : ''}
@@ -193,11 +192,6 @@ function renderStart() {
       <button type="button" class="btn ghost wide" data-act="type" ${S.busy && !S.warming ? 'disabled' : ''}>Type the items instead</button>
     </div>
     <p id="scanStatus" class="sr" role="status" aria-live="polite">${S.busy ? 'Reading the receipt' : ''}</p>
-    <ol class="how">
-      <li><span><b>Snap the receipt.</b> We read the items and the total.</span></li>
-      <li><span><b>Say who had what,</b> or send the link and let everyone tap their own.</span></li>
-      <li><span><b>Get paid back</b> on Venmo, Cash App, PayPal or Zelle.</span></li>
-    </ol>
     ${recent.length ? `<h2 class="group">Your tabs</h2><div class="rows">${recent.map((x) => `<a class="list-row" href="/t/${x.id}"><span class="grow"><b>${esc(x.title)}</b><small class="muted">${new Date(x.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${fmt(x.charge || 0)}${x.host ? ' · you paid' : x.payer ? ` · ${esc(x.payer)} paid` : ''}</small></span>${CHEV}</a>`).join('')}</div>` : ''}`;
   $('#photo').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) scanPhoto(f); });
 }
@@ -261,15 +255,17 @@ function reviewNumbers() {
 }
 function reviewStatus() {
   const n = reviewNumbers();
-  const parts = [`<p class="sum-line money"><span>Items add up to</span><b>${fmt(n.sum + n.inSub)}</b></p>`];
-  if (n.printed) {
-    const diff = n.printed - n.inSub - n.sum;
-    if (Math.abs(diff) < 1) parts.push(`<p class="banner ok">That matches the receipt’s ${fmt(n.printed)} subtotal.</p>`);
-    else parts.push(`<p class="banner warn">The receipt says ${fmt(n.printed)}. Check the lines against the photo.</p>`);
+  // One line when the items match the receipt; the warning only when they don't.
+  const parts = [];
+  const matched = n.printed && Math.abs(n.printed - n.inSub - n.sum) < 1;
+  if (matched) parts.push(`<p class="banner ok money">Items add up to ${fmt(n.sum + n.inSub)}, matching the receipt.</p>`);
+  else {
+    parts.push(`<p class="sum-line money"><span>Items add up to</span><b>${fmt(n.sum + n.inSub)}</b></p>`);
+    if (n.printed) parts.push(`<p class="banner warn">The receipt says ${fmt(n.printed)}. Check the lines against the photo.</p>`);
   }
   if (Number.isFinite(n.charge) && n.charge > 0) {
     if (n.charge < n.sum) parts.push(`<p class="banner warn">The card charge is less than the items. Check it.</p>`);
-    else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}, split by what each person had.</p>`);
+    else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
   }
   return parts.join('');
 }
@@ -280,9 +276,7 @@ function renderReview() {
   if (rc.tip && rc.tip_included_in_total === false) notes.push(`Includes the ${fmt(Math.round(rc.tip * 100))} tip written below the total.`);
   if (rc.card_charge == null && rc.total != null && !rc.tip) notes.push('If you added a tip when you paid, include it.');
   app.innerHTML = `
-    ${stepTag(1)}
-    <h1>Check the receipt</h1>
-    <p class="lede">${S.receipt ? 'Fix anything that doesn’t match the paper.' : 'Add each line from the receipt.'}</p>
+    <h1>${S.receipt ? 'Check the receipt' : 'Add the items'}</h1>
     ${S.photo ? `<button type="button" class="photo-btn" data-act="photo"><img src="${S.photo}" alt=""><span><b>See the receipt</b><small class="muted">Tap to compare</small></span>${CHEV}</button>` : ''}
     <div class="card totals">
       <label class="f" for="charge" style="margin-top:0">Total charged to the card, with tip</label>
@@ -316,13 +310,11 @@ function renderPeople() {
       <details class="more-ways" ${extra ? 'open' : ''}><summary>Cash App, PayPal or Zelle</summary>${WAYS.slice(1).map((k) => payField(k, S[k])).join('')}</details>`;
   const you = `<label class="f" for="hostName" style="margin-top:0">Your name</label><input id="hostName" class="in" value="${esc(S.hostName)}" maxlength="24" autocomplete="given-name" placeholder="Your name">`;
   app.innerHTML = `
-    ${stepTag(2)}
     <h1>Who was there?</h1>
-    <p class="lede">Add everyone, including anyone who already left. You can assign their items next, or send them the link.</p>
-    <h2 style="margin-top:0">Who paid the bill?</h2>
-    <div class="choices" role="radiogroup">
-      <label class="choice"><input type="radio" name="paidBy" value="me" ${other ? '' : 'checked'}><span><b>I did</b><span>Everyone pays you back.</span></span></label>
-      <label class="choice"><input type="radio" name="paidBy" value="other" ${other ? 'checked' : ''}><span><b>Someone else</b><span>You’re setting it up for them. Everyone, you included, pays them back.</span></span></label>
+    <h2>Who paid?</h2>
+    <div class="choices two" role="radiogroup">
+      <label class="choice"><input type="radio" name="paidBy" value="me" ${other ? '' : 'checked'}><span><b>Me</b></span></label>
+      <label class="choice"><input type="radio" name="paidBy" value="other" ${other ? 'checked' : ''}><span><b>Someone else</b></span></label>
     </div>
     ${other ? `<div class="card" style="margin-top:14px">
       <label class="f" for="payerName" style="margin-top:0">Who paid</label><input id="payerName" class="in" value="${esc(S.payer.name)}" maxlength="24" autocomplete="off" autocapitalize="words" placeholder="Their name">
@@ -335,11 +327,10 @@ function renderPeople() {
     <form id="addForm" class="row2" autocomplete="off"><input id="addName" class="in" placeholder="Name (or several, with commas)" maxlength="200" enterkeyhint="done" autocapitalize="words"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>
     <div class="chips" id="chips">${S.people.map((n, k) => `<span class="chip">${av({ name: n, color: k + 1 })}${esc(n)}<button type="button" data-act="delname" data-k="${k}" aria-label="Remove ${esc(n)}">×</button></span>`).join('')}</div>
     <h2>How to split</h2>
-    <div class="choices" role="radiogroup">
-      <label class="choice"><input type="radio" name="mode" value="items" ${S.mode === 'items' ? 'checked' : ''}><span><b>By what each person had</b><span>Best when people ordered different things.</span></span></label>
-      <label class="choice"><input type="radio" name="mode" value="even" ${S.mode === 'even' ? 'checked' : ''}><span><b>Evenly, minus what people skipped</b><span>Best for big groups and shared plates.</span></span></label>
+    <div class="choices two" role="radiogroup">
+      <label class="choice"><input type="radio" name="mode" value="items" ${S.mode === 'items' ? 'checked' : ''}><span><b>By what each had</b></span></label>
+      <label class="choice"><input type="radio" name="mode" value="even" ${S.mode === 'even' ? 'checked' : ''}><span><b>Evenly</b></span></label>
     </div>
-    <label class="switch"><input type="checkbox" id="private" ${S.private ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span><b>Keep totals private</b><span>Friends see only their own total, not everyone’s.</span></span></label>
     <div class="sh-foot"><button type="button" class="btn wide" data-act="create">Create the tab</button></div>`;
   $('#addForm').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -416,7 +407,6 @@ async function createTab() {
     T = d.state; view = 'people';
     rememberTab();
     renderAll(); poll();
-    openSheet({ type: 'created' });
   } catch (e) { toast(e.message); btn.disabled = false; }
 }
 
@@ -628,7 +618,7 @@ function renderJoin(C) {
   const list = people().filter((p) => p.id !== HOST || isHost);
   setHTML(app, `
     <h1>Who are you?</h1>
-    <p class="lede">${esc(T.payer.name)} paid ${fmt(T.charge)}. Tap your name, then pick what you had.</p>
+    <p class="lede">${esc(T.payer.name)} paid ${fmt(T.charge)}. Tap your name.</p>
     <div class="names">${list.map((p) => {
       const r = C.byId[p.id];
       const tag = p.paid != null && r.owed <= SLACK ? '<small class="pill ok">Paid</small>' : r.total ? `<small class="pill">${showAll() ? `${fmt(r.total)} so far` : 'Has items'}</small>` : '';
@@ -681,7 +671,7 @@ function itemsList(C) {
     html += `<div class="banner edit" role="status"><span>Editing <b>${esc(nameOf(editFor))}</b>’s items. Tap to add or remove.</span>
       <button type="button" class="btn sm" data-act="editdone">Done</button></div>`;
   } else if (!T.closed) {
-    html += `<p class="note intro">${even ? 'Everything is split evenly. Untick anything you didn’t have.' : 'Tap what you had. Shared a plate? Tap Split to add the others.'}</p>`;
+    if (even) html += `<p class="note intro">Untick anything you didn’t have.</p>`; // itemized: the bar below already says "Tap what you had"
   }
   // Rows sort into the two groups when you arrive, then stay where they are while you tap.
   const key = `${target}|${T.items.map((it) => it.id).join()}`;
@@ -766,30 +756,14 @@ function statusOf(r) {
 }
 
 // Where the bill stands: the payer's own share, what's back, what's owed, and what nobody has claimed.
-function summaryCard(C) {
-  const others = C.res.filter((r) => r.p.id !== HOST && !leaving.has(r.p.id));
-  const yours = Math.max(0, C.byId[HOST] ? C.byId[HOST].total : 0);
-  const paid = C.collected;
-  const owed = others.reduce((s, r) => s + (r.settled ? 0 : Math.max(0, r.owed)), 0);
-  const open = Math.max(0, C.pool);
-  const back = Math.max(0, T.charge - yours);
-  const parts = [['paid', 'Paid back', paid], ['owed', 'Owed', owed], ['open', 'Not claimed', open], ['yours', paidIt() ? 'Your share' : `${T.payer.name}’s share`, yours]].filter((x) => x[2] > SLACK);
-  const sum = Math.max(T.charge, parts.reduce((s, x) => s + x[2], 0)) || 1;
-  return `<div class="card summary">
-    <p class="eyebrow">${paidIt() ? 'Paid back to you' : `Paid back to ${esc(T.payer.name)}`}</p>
-    <p class="big-num money">${fmt(paid)} <span class="muted">of ${fmt(back)}</span></p>
-    <div class="stack-bar" aria-hidden="true">${parts.map(([k, , v]) => `<i class="${k}" style="width:${(v / sum) * 100}%"></i>`).join('')}</div>
-    <ul class="legend">${parts.map(([k, label, v]) => `<li><i class="${k}"></i>${label} <b class="money">${fmt(v)}</b></li>`).join('')}</ul></div>`;
-}
-
 function peoplePanel(C) {
   const others = C.res.filter((r) => r.p.id !== HOST && !leaving.has(r.p.id));
-  let html = summaryCard(C);
+  let html = '';
 
   if (C.openItems.length || Math.abs(C.pool) > SLACK) {
     const n = C.openItems.length;
     html += `<div class="card open-card"><div class="card-h"><h3>${n ? `${plural(n, 'item')} not claimed yet` : 'Not covered yet'}</h3><b class="money">${fmt(C.pool)}</b></div>
-      <p class="note" style="margin-top:0">${isHost ? `Assign them, or once everyone’s had a look, split what’s left or ${payerYou('cover it', `have ${esc(T.payer.name)} cover it`)}.` : `If you had one of these, claim it. Until then ${esc(T.payer.name)} is covering it.`}</p>`;
+`;
     if (n) {
       html += `<ul class="lines">${C.openItems.map((it) => {
         const inf = C.info[it.id];
@@ -797,7 +771,7 @@ function peoplePanel(C) {
         return `<li><span>${esc(what)}</span>${isHost ? `<button type="button" class="btn sm ghost" data-act="assign" data-i="${it.id}">Who had it?</button>` : `<button type="button" class="btn sm ghost" data-act="item" data-i="${it.id}">I had it</button>`}</li>`;
       }).join('')}</ul>`;
     }
-    if (!T.closed && isHost) {
+    if (!T.closed && isHost && n < T.items.length) { // offered once someone has claimed something
       html += `<div class="acts"><button type="button" class="btn sm ghost" data-act="pool" data-v="spread">Split across everyone who hasn’t paid</button>
         <button type="button" class="btn sm ghost" data-act="pool" data-v="cover">${payerYou('I’ll cover it', `${esc(T.payer.name)} covers it`)}</button></div>`;
     }
@@ -816,13 +790,11 @@ function peoplePanel(C) {
   const owing = others.filter((r) => !r.settled && r.owed > SLACK).length;
   const row = (a, label, sub = '') => `<button type="button" class="list-row" data-act="${a}"><span class="grow"><b>${label}</b>${sub ? `<small class="muted">${sub}</small>` : ''}</span>${CHEV}</button>`;
   html += `<h2 class="group">Tab</h2><div class="rows">
-    ${row('share', 'Share the link', 'Everyone taps their name and picks what they had')}
     ${owing && !T.closed ? row('remindall', 'Nudge the group', `${plural(owing, 'person owes', 'people owe')} ${payerYou('you')}`) : ''}
-    ${row('settings', 'Tab settings', `Name, ways to pay ${payerYou('you')}, privacy`)}
-    ${row('report', 'See the report')}
-    ${row('newtab', 'Start a new tab', 'This one stays in Your tabs')}
+    ${row('settings', 'Tab settings')}
+    ${row('newtab', 'Start a new tab')}
     ${/^deploy-preview-/.test(location.hostname) ? `<a class="list-row" href="${LIVE}/t/${tabId}#h=${encodeURIComponent(hostKey)}"><span class="grow"><b>Open on the live site</b></span>${CHEV}</a>` : ''}
-    ${T.closed ? row('reopen', 'Reopen the tab') : row('close', 'Close the tab', allDone ? 'Everyone’s square' : 'Best once everyone has paid and nothing is left uncovered')}</div>`;
+    ${T.closed ? row('reopen', 'Reopen the tab') : row('close', 'Close the tab', allDone ? 'Everyone’s square' : '')}</div>`;
   return html;
 }
 
@@ -842,11 +814,11 @@ function personCard(r) {
   } else if (!T.closed) {
     const owes = !r.settled && r.owed > SLACK;
     if (p.id !== HOST && p.paid != null && !p.ok) acts += `<button type="button" class="btn sm" data-act="confirm" data-p="${p.id}">Confirm ${fmt(p.paid)}</button>`;
-    else if (p.id !== HOST && owes) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind</button>`;
+    else if (p.id !== HOST && p.id !== me && owes) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind</button>`;
     acts += `<button type="button" class="btn sm ghost" data-act="editfor" data-p="${p.id}">${p.id === me ? 'Edit my items' : 'Edit items'}</button>`;
     if (p.id === me && !paidIt() && owes) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
     if (p.id !== HOST) {
-      if (p.paid != null && !p.ok && owes) more += `<button type="button" class="btn sm ghost" data-act="remind" data-p="${p.id}">Remind</button>`;
+      if (p.paid != null && !p.ok && owes && p.id !== me) more += `<button type="button" class="btn sm ghost" data-act="remind" data-p="${p.id}">Remind</button>`;
       if (owes) more += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;
       if (p.paid != null && r.owed > SLACK) more += `<button type="button" class="btn sm ghost" data-act="waive" data-p="${p.id}">Let the ${fmt(r.owed)} go</button>`;
       if (p.paid != null) more += `<button type="button" class="btn sm ghost" data-act="unpaid" data-p="${p.id}">Undo payment</button>`;
@@ -1107,7 +1079,6 @@ function renderSheet(C) {
     }
     if (me !== HOST && r.p.paid != null && !T.closed) pay += `<button type="button" class="link" data-act="unpaid-me">Undo my payment</button>`;
     setHTML(b, `<div class="sh"><h2 id="sheetTitle">${me === HOST ? 'Your share' : 'Your total'} <span class="money">${fmt(r.total)}</span></h2>
-      <p class="sub">Your items, plus your share of tax, fees and tip in proportion to what you had.</p>
       ${linesHtml(r)}
       ${r.p.paid != null && me !== HOST ? `<p class="banner ${r.owed <= SLACK ? 'ok' : ''} money">You’ve paid ${fmt(r.p.paid)}${r.p.waived ? `; ${esc(T.payer.name)} let ${fmt(r.p.waived)} go` : ''}${r.owed > SLACK ? `. ${fmt(r.owed)} left.` : '.'}</p>` : ''}
       <div class="sh-foot">${pay}${done('Close')}</div></div>`);
@@ -1124,16 +1095,6 @@ function renderSheet(C) {
       <form id="amountForm"><label class="sr" for="amount">Amount in dollars</label>
       <div class="adorn big"><span aria-hidden="true">$</span><input id="amount" class="in money" inputmode="decimal" value="${dollars(Math.max(0, r.owed))}" autocomplete="off"></div>
       <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${done('Cancel')}</div></form></div>`;
-  } else if (s.type === 'created') {
-    setHTML(b, `<div class="sh"><h2 id="sheetTitle">Your tab is ready</h2>
-      <p class="sub">How do you want to fill it in?</p>
-      <div class="paths">
-        <button type="button" class="path" data-act="go-assign"><b>I know who had what</b><span>Assign the items yourself, then send each person their total.</span>${CHEV}</button>
-        <button type="button" class="path" data-act="share"><b>Send the link</b><span>Everyone taps their name, picks what they had and pays ${payerYou('you')}.</span>${CHEV}</button>
-      </div>
-      <p class="note">You can mix both: assign what you know, then share the link for the rest.</p>
-      <div class="sh-foot">${done('Not now')}<button type="button" class="link" data-act="copyhost">Copy your host link</button></div>
-      <p class="note center">This phone is the host. The host link lets you manage the tab from another device. Keep it to yourself.</p></div>`);
   } else if (s.type === 'close') {
     setHTML(b, `<div class="sh"><h2 id="sheetTitle">Close the tab?</h2><p class="sub">Nobody can change their items after this. You can reopen it.</p>
       <div class="sh-foot"><button type="button" class="btn wide" data-act="close-yes">Close the tab</button>${done('Cancel')}</div></div>`);
@@ -1147,7 +1108,8 @@ function renderSheet(C) {
       <p class="sub">Fill in any you use. Friends get a button for each.</p>
       ${WAYS.map((k) => payField(k, T.payer[k])).join('')}
       <label class="switch" style="margin-top:18px"><input type="checkbox" id="sPrivate" ${T.private ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span><b>Keep totals private</b><span>Friends see only their own total, not everyone’s.</span></span></label>
-      <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${done('Cancel')}</div></form></div>`;
+      <div class="sh-foot"><button class="btn wide" type="submit">Save</button>${done('Cancel')}</div></form>
+      <div class="sh-foot"><button type="button" class="link" data-act="copyhost">Copy the host link, to manage this tab from another phone</button><button type="button" class="link" data-act="report">See the report</button></div></div>`;
   } else if (s.type === 'who') {
     if (b.querySelector('#renameInput')) return;
     const p = T.people[me];
@@ -1301,7 +1263,7 @@ $('#sheetBody').addEventListener('click', (e) => {
   if (a === 'close-sheet') { if (s.type === 'paycheck') payReturn = null; closeSheet(); return; }
   if (!T) return;
   if (a === 'share') { shareLink(); return; }
-  if (a === 'go-assign') { closeSheet(); view = 'items'; editFor = null; arrangement = null; renderAll(); window.scrollTo(0, 0); return; }
+  if (a === 'report') { window.open(`/api/report?t=${tabId}&key=${encodeURIComponent(hostKey)}`, '_blank', 'noopener'); return; }
   if (a === 'copyhost') { copyText(`${location.origin}/t/${tabId}#h=${hostKey}`, 'Host link copied. Keep it somewhere private.'); return; }
   if (a === 'pay') {
     const amt = Number(b.dataset.amt), how = b.dataset.how;
