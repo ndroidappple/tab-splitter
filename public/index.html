@@ -289,6 +289,20 @@ details.more-ways[open] > summary::before{content:'− '}
 .dock-sum small.warn-text{color:var(--warn);font-weight:650}
 .dock-sum strong{display:inline-block;transform-origin:left center}
 .dock-in > .btn.wide:only-child{flex:1}
+/* The one thing to do next (Review and pay, while you owe): a light circles the button's rim with a
+   soft halo behind it. GymBuddy's Week in review chip, in Splitty's indigo. app.mjs syncs every glow
+   to one clock (--glow-t), so a re-rendered dock doesn't restart the spin. Reduce Motion holds it still. */
+@property --glow-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+.glow{position:relative;isolation:isolate;--glow-ring:conic-gradient(from var(--glow-a),var(--glow-tail) 0 55%,var(--glow-1) 72%,var(--glow-2) 84%,var(--glow-1) 94%,var(--glow-tail));
+  --glow-tail:color-mix(in srgb,var(--accent) 30%,transparent);--glow-1:#7C6BFF;--glow-2:#4FC3FF}
+.glow::before,.glow::after{content:'';position:absolute;inset:-3px;border-radius:calc(16px + 3px);pointer-events:none;background:var(--glow-ring);animation:glow-spin 3.6s linear infinite;animation-delay:var(--glow-t,0ms)}
+.glow::before{z-index:1;padding:2.5px;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+.glow::after{z-index:-1;filter:blur(10px);opacity:.45;animation:glow-spin 3.6s linear infinite,glow-halo 3s ease-in-out infinite;animation-delay:var(--glow-t,0ms),0ms}
+@keyframes glow-spin{to{--glow-a:360deg}}
+@keyframes glow-halo{50%{opacity:.2}}
+@media (prefers-color-scheme: dark){.glow{--glow-1:#B4A8FF;--glow-2:#7FE0FF}.glow::after{opacity:.55}}
 
 /* Sheets rise from the bottom edge on the surface spring, follow a drag down, and slide away however
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */
