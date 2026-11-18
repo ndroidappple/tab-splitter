@@ -924,6 +924,11 @@ function openSheet(s) {
   const fade = closing ? getComputedStyle(scrim).opacity : 0;
   if (closing) { closing = null; stopSheetMotion(); }
   sheet = s; b._h = null; renderSheet(sheetC());
+  // Hold the start pose inline before the dialog appears. Safari can paint a just-opened dialog a frame
+  // before its animation starts, which flashes the whole sheet in place before it drops and slides up.
+  // The inline pose covers that frame and is let go once the animation is really running.
+  const moving = !still() && !!panel.animate;
+  if (moving) { panel.style.transform = from; scrim.style.opacity = String(fade); }
   if (!dlg.open) {
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     // Safari focuses the first button inside and scrolls to show it while the panel is still below the
@@ -932,8 +937,15 @@ function openSheet(s) {
     dlg.scrollTop = 0; sheetWrap.scrollTop = 0; b.scrollTop = 0;
   }
   fitSheet();
-  anim(panel, [{ transform: from }, { transform: 'translateY(0)' }], 'surface');
-  anim(scrim, [{ opacity: fade }, { opacity: 1 }], 'enter');
+  if (!moving) return;
+  const rise = anim(panel, [{ transform: from }, { transform: 'translateY(0)' }], 'surface');
+  const dim = anim(scrim, [{ opacity: fade }, { opacity: 1 }], 'enter');
+  const pose = String(fade);
+  // Let go of the held pose once each animation is running, unless a finger has taken the sheet meanwhile.
+  if (rise) rise.ready.then(() => { if (panel.style.transform === from) panel.style.transform = ''; }, () => {});
+  else panel.style.transform = '';
+  if (dim) dim.ready.then(() => { if (scrim.style.opacity === pose) scrim.style.opacity = ''; }, () => {});
+  else scrim.style.opacity = '';
 }
 function stopSheetMotion() {
   for (const el of [panel, scrim]) if (el.getAnimations) el.getAnimations().forEach((x) => x.cancel());
