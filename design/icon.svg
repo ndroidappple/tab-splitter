@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <!-- Splitty, the app's mascot: a cheerful receipt who waves hello. Rendered to public/icon-*.png. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E7E9FC"/><stop offset="1" stop-color="#C9CFF6"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF5EA"/><stop offset="1" stop-color="#FBD5BF"/></linearGradient>
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <g transform="translate(512 540) scale(1.1) translate(-512 -540)">
-  <ellipse cx="520" cy="872" rx="250" ry="34" fill="#4B57D1" opacity=".16"/>
-  <g transform="rotate(-6 512 540)" stroke="#262A63" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+  <ellipse cx="520" cy="872" rx="250" ry="34" fill="#B8441F" opacity=".16"/>
+  <g transform="rotate(-6 512 540)" stroke="#2B211C" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
     <!-- waving arm -->
     <path d="M330 520 Q 270 500 250 430" fill="none"/>
     <circle cx="244" cy="408" r="40" fill="#FFFFFF"/>
@@ -18,19 +18,19 @@
   </g>
   <g transform="rotate(-6 512 540)">
     <!-- face -->
-    <ellipse cx="446" cy="380" rx="31" ry="40" fill="#262A63"/>
-    <ellipse cx="580" cy="380" rx="31" ry="40" fill="#262A63"/>
+    <ellipse cx="446" cy="380" rx="31" ry="40" fill="#2B211C"/>
+    <ellipse cx="580" cy="380" rx="31" ry="40" fill="#2B211C"/>
     <circle cx="457" cy="365" r="11" fill="#FFFFFF"/>
     <circle cx="591" cy="365" r="11" fill="#FFFFFF"/>
-    <ellipse cx="404" cy="446" rx="32" ry="19" fill="#FF9DB3" opacity=".85"/>
-    <ellipse cx="622" cy="446" rx="32" ry="19" fill="#FF9DB3" opacity=".85"/>
-    <path d="M468 432 H558 Q558 494 513 494 Q468 494 468 432 Z" fill="#262A63" stroke="#262A63" stroke-width="10" stroke-linejoin="round"/>
-    <path d="M487 482 Q513 462 539 482 Q528 494 513 494 Q498 494 487 482 Z" fill="#FF7A98"/>
+    <ellipse cx="404" cy="446" rx="32" ry="19" fill="#FF9C8A" opacity=".85"/>
+    <ellipse cx="622" cy="446" rx="32" ry="19" fill="#FF9C8A" opacity=".85"/>
+    <path d="M468 432 H558 Q558 494 513 494 Q468 494 468 432 Z" fill="#2B211C" stroke="#2B211C" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M487 482 Q513 462 539 482 Q528 494 513 494 Q498 494 487 482 Z" fill="#F2675A"/>
     <!-- the receipt lines -->
     <g stroke-width="24" stroke-linecap="round">
-      <path d="M404 580 H620" stroke="#4B57D1"/>
-      <path d="M404 640 H566" stroke="#AEB5EE"/>
-      <path d="M404 700 H468 M556 700 H620" stroke="#4B57D1"/>
+      <path d="M404 580 H620" stroke="#D2461F"/>
+      <path d="M404 640 H566" stroke="#F2B39E"/>
+      <path d="M404 700 H468 M556 700 H620" stroke="#D2461F"/>
     </g>
   </g>
   </g>

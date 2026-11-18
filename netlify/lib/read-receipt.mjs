@@ -17,13 +17,16 @@ export function addsUp(r) {
   return printed != null && Math.abs(sum - Math.round(printed * 100)) < 1;
 }
 
-// What the host most likely paid: the card charge if shown, else total plus a tip printed outside it.
+// What the host most likely paid: the card charge if shown, else total plus a tip written outside it.
+// A slip signed before the tip often has its printed total read as the card charge; when a tip is written
+// below the total, the charge is at least total + tip, or the host would collect too little.
 export function likelyCharge(r) {
   if (!r) return null;
-  if (r.card_charge != null) return Math.round(r.card_charge * 100);
-  if (r.total == null) return null;
-  const tip = r.tip != null && r.tip_included_in_total === false ? r.tip : 0;
-  return Math.round((r.total + tip) * 100);
+  const c = (v) => Math.round(v * 100);
+  const tip = r.tip != null && r.tip_included_in_total === false ? c(r.tip) : 0;
+  const withTip = r.total != null ? c(r.total) + tip : null;
+  if (r.card_charge != null) return withTip != null && tip ? Math.max(c(r.card_charge), withTip) : c(r.card_charge);
+  return withTip;
 }
 
 const monthKey = (now) => `budget/${new Date(now).toISOString().slice(0, 7)}`;
