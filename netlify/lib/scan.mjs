@@ -68,8 +68,23 @@ function setting(env, name) {
   return typeof v === 'string' ? v : '';
 }
 
+// What this function instance was started with: names and hosts only, never key values. Logged once per
+// instance, and on every scan that finds no key, to pin down when Netlify leaves the gateway key out.
+const INSTANCE = Math.random().toString(36).slice(2, 8), BOOTED = Date.now();
+let described = false;
+function describeAiEnv(env) {
+  const host = (u) => { try { return new URL(u).host; } catch (e) { return u ? 'unparseable' : null; } };
+  return JSON.stringify({
+    instance: INSTANCE, ageSec: Math.round((Date.now() - BOOTED) / 1000),
+    names: Object.keys(env).filter((k) => /ANTHROPIC|AI_GATEWAY/.test(k)).sort(),
+    viaNetlifyEnv: !!(globalThis.Netlify && Netlify.env && Netlify.env.get('ANTHROPIC_API_KEY')),
+    anthropicHost: host(setting(env, 'ANTHROPIC_BASE_URL')), gatewayHost: host(setting(env, 'NETLIFY_AI_GATEWAY_URL')),
+  });
+}
+
 export async function scanReceipt({ imageBase64, mediaType = 'image/jpeg', model, env = process.env, fetchImpl = fetch }) {
   const key = setting(env, 'ANTHROPIC_API_KEY');
+  if (env === process.env && (!key || !described)) { described = true; console.log((key ? 'ai env ok ' : 'ai env missing key ') + describeAiEnv(env)); }
   if (!key) return { error: 'no API key in this function yet', noKey: true, ms: 0 };
   const base = (setting(env, 'ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/$/, '');
   const started = Date.now();

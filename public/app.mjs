@@ -224,15 +224,17 @@ async function scanPhoto(file) {
     // deploy or a quiet spell, so say so and keep retrying; typing the items stays available meanwhile.
     let r, d;
     for (let attempt = 0; ; attempt++) {
-      r = await fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) });
-      d = await r.json().catch(() => ({}));
+      // A dropped connection (Safari's "Load failed", often from switching apps mid-scan) is retried too.
+      try { r = await fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image }) }); } catch (err) { r = null; }
+      d = r ? await r.json().catch(() => ({})) : {};
       if (run !== scanRun) return;
-      if (r.status !== 503 || attempt >= 18) break; // about 90 seconds in all
+      if ((r && r.status !== 503) || attempt >= 18) break; // about 90 seconds in all
       if (!S.warming) { S.warming = true; renderStart(); }
       await new Promise((res) => setTimeout(res, 5000));
       if (run !== scanRun) return;
     }
     S.warming = false;
+    if (!r) throw new Error('Lost the connection while reading the receipt. Try again, or type the items.');
     if (!r.ok) throw new Error(d.error || 'Couldn’t read that receipt. Try again, or type the items.');
     const rc = d.receipt || {};
     S.receipt = rc; S.check = d.check; S.scan = d.model;
