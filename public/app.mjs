@@ -184,7 +184,7 @@ function renderStart() {
       <p class="lede">Snap the receipt. Everyone taps what they had and pays you back, tax and tip included.</p>
     </section>
     ${hasDraft(d) ? `<div class="card resume"><div><b>Pick up where you left off</b><span class="muted">${esc(d.title || 'Your last receipt')} · ${plural((d.items || []).filter((it) => it.name).length, 'item')}</span></div>
-      <div class="row2"><button type="button" class="btn sm" data-act="resume">Continue</button><button type="button" class="btn sm ghost" data-act="discard">Discard</button></div></div>` : ''}
+      <div class="row2"><button type="button" class="btn sm soft" data-act="resume">Continue</button><button type="button" class="btn sm ghost" data-act="discard">Discard</button></div></div>` : ''}
     <div class="stack">
       <label class="btn wide big" for="photo">${S.busy ? `<span class="spin"></span> ${S.warming ? 'Waking up the receipt reader…' : 'Reading the receipt…'}` : 'Take a photo of the receipt'}</label>
       <input id="photo" type="file" accept="image/*" class="sr" ${S.busy ? 'disabled' : ''}>
@@ -326,7 +326,7 @@ function renderPeople() {
       ${ways}
     </div>`}
     <label class="f" for="addName">Everyone else</label>
-    <form id="addForm" class="row2" autocomplete="off"><input id="addName" class="in" placeholder="Name (or several, with commas)" maxlength="200" enterkeyhint="done" autocapitalize="words"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>
+    <form id="addForm" class="row2" autocomplete="off"><input id="addName" class="in" placeholder="Name (or several, with commas)" maxlength="200" enterkeyhint="done" autocapitalize="words"><button class="btn soft" type="submit" style="flex:0 0 auto">Add</button></form>
     <div class="chips" id="chips">${S.people.map((n, k) => `<span class="chip">${av({ name: n, color: k + 1 })}${esc(n)}<button type="button" data-act="delname" data-k="${k}" aria-label="Remove ${esc(n)}">×</button></span>`).join('')}</div>
     <h2>How to split</h2>
     <div class="choices two" role="radiogroup">
@@ -673,7 +673,7 @@ function itemsList(C) {
   if (isHost && !T.closed) html += assignStrip(C);
   else if (editFor && T.people[editFor]) {
     html += `<div class="banner edit" role="status"><span>Editing <b>${esc(nameOf(editFor))}</b>’s items. Tap to add or remove.</span>
-      <button type="button" class="btn sm" data-act="editdone">Done</button></div>`;
+      <button type="button" class="btn sm soft" data-act="editdone">Done</button></div>`;
   } else if (!T.closed) {
     if (even) html += `<p class="note intro">Untick anything you didn’t have.</p>`; // itemized: the bar below already says "Tap what you had"
   }
@@ -688,7 +688,7 @@ function itemsList(C) {
       <div class="rows">${needs.map((it) => itemRowHtml(it, C, target)).join('')}</div>`;
   }
   if (taken.length) {
-    html += `<h2 class="group">${even ? 'Shared' : 'Claimed'} <span class="count">${taken.length}</span></h2>
+    html += `<h2 class="group">${even ? 'Shared' : 'Claimed'} <span class="count ok">${taken.length}</span></h2>
       <div class="rows">${taken.map((it) => itemRowHtml(it, C, target)).join('')}</div>`;
   }
   return html;
@@ -787,7 +787,7 @@ function peoplePanel(C) {
   html += `<h2 class="group">People <span class="count">${others.length + 1}</span></h2>
     <div class="stack">${[C.byId[HOST], ...others].map((r) => personCard(r)).join('')}</div>
     ${T.closed || !isHost ? '' : `<form id="addPerson" class="row2" style="margin-top:12px" autocomplete="off"><label class="sr" for="addPersonName">Add someone</label>
-      <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24" autocapitalize="words"><button class="btn" type="submit" style="flex:0 0 auto">Add</button></form>`}`;
+      <input id="addPersonName" class="in" placeholder="Add someone" maxlength="24" autocapitalize="words"><button class="btn soft" type="submit" style="flex:0 0 auto">Add</button></form>`}`;
 
   if (!isHost) return html;
   const allDone = C.allPaid || (others.every((r) => r.settled || !r.total) && Math.abs(C.pool) <= SLACK);
@@ -813,14 +813,14 @@ function personCard(r) {
   if (!T.closed && !isHost) {
     if (p.id === me) {
       acts += `<button type="button" class="btn sm ghost" data-act="editdone">Edit my items</button>`;
-      if (r.owed > SLACK && !r.settled) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
+      if (r.owed > SLACK && !r.settled) acts += `<button type="button" class="btn sm soft" data-act="mine">Review and pay</button>`;
     }
   } else if (!T.closed) {
     const owes = !r.settled && r.owed > SLACK;
-    if (p.id !== HOST && p.paid != null && !p.ok) acts += `<button type="button" class="btn sm" data-act="confirm" data-p="${p.id}">Confirm ${fmt(p.paid)}</button>`;
-    else if (p.id !== HOST && p.id !== me && owes) acts += `<button type="button" class="btn sm" data-act="remind" data-p="${p.id}">Remind</button>`;
+    if (p.id !== HOST && p.paid != null && !p.ok) acts += `<button type="button" class="btn sm soft" data-act="confirm" data-p="${p.id}">Confirm ${fmt(p.paid)}</button>`;
+    else if (p.id !== HOST && p.id !== me && owes) acts += `<button type="button" class="btn sm soft" data-act="remind" data-p="${p.id}">Remind</button>`;
     acts += `<button type="button" class="btn sm ghost" data-act="editfor" data-p="${p.id}">${p.id === me ? 'Edit my items' : 'Edit items'}</button>`;
-    if (p.id === me && !paidIt() && owes) acts += `<button type="button" class="btn sm" data-act="mine">Review and pay</button>`;
+    if (p.id === me && !paidIt() && owes) acts += `<button type="button" class="btn sm soft" data-act="mine">Review and pay</button>`;
     if (p.id !== HOST) {
       if (p.paid != null && !p.ok && owes && p.id !== me) more += `<button type="button" class="btn sm ghost" data-act="remind" data-p="${p.id}">Remind</button>`;
       if (owes) more += `<button type="button" class="btn sm ghost" data-act="markpaid" data-p="${p.id}">Mark paid</button>`;

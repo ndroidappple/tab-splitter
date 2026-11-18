@@ -305,6 +305,10 @@ await test('receipt check and the charge guess', async () => {
   assert.equal(addsUp(badReceipt), false);
   assert.equal(likelyCharge(goodReceipt), 2000); // total plus a tip printed outside it
   assert.equal(likelyCharge({ ...goodReceipt, card_charge: 21.5 }), 2150);
+  // Wild Tomato: $152.09 printed, $28 tip written below, card charge read as the printed total.
+  assert.equal(likelyCharge({ total: 152.09, tip: 28, tip_included_in_total: false, card_charge: 152.09 }), 18009);
+  assert.equal(likelyCharge({ total: 152.09, tip: 28, tip_included_in_total: false, card_charge: 180.09 }), 18009);
+  assert.equal(likelyCharge({ total: 152.09, tip: null, tip_included_in_total: null, card_charge: 152.09 }), 15209);
 });
 
 await test('Haiku reads it when the items add up; Sonnet is not called', async () => {

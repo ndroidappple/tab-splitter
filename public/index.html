@@ -5,20 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Splitty</title>
 <meta name="description" content="Split the bill in a minute: snap the receipt, say who had what, and everyone pays you back.">
-<meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#F1F0EB" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Splitty">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <style>
-/* Tokens. One accent for actions; green means paid, amber means waiting on someone, red only means
-   something is wrong. Person colours (avatars, checks, slots) come from the palette in app.mjs. */
+/* Tokens. Colour guides the eye to two things: what you care about (the dark dock, the highest-contrast
+   surface on screen, holding your number) and what's next (the one solid accent button, in the dock).
+   Other actions are tinted, not solid. Green means done or matching, amber means waiting on someone,
+   red only means something is wrong. Person colours (avatars, checks, slots) come from app.mjs. */
 :root{
-  --bg:#F6F5F1; --card:#FFFFFF; --field:#EFEDE7; --ink:#17181C; --muted:#696C74; --line:#E4E1DA; --line-2:#D4D0C7;
+  --bg:#F1F0EB; --card:#FFFFFF; --field:#EFEDE7; --ink:#17181C; --muted:#696C74; --line:#E4E1DA; --line-2:#D4D0C7;
   --accent:#4B57D1; --accent-ink:#FFFFFF; --accent-soft:#E9EBFB;
   --ok:#15784A; --ok-soft:#E2F3EA; --pend:#A35400; --pend-soft:#FCEFDC; --warn:#C0352B; --warn-soft:#FBE6E3;
   --me:#4B57D1;
+  --dock:#17181C; --dock-ink:#FFFFFF; --dock-muted:#A9ACB5; --dock-ok:#5FD39A; --dock-warn:#FFB45E; --dock-accent:#5D69F0; --dock-accent-ink:#FFFFFF;
   --shadow:0 1px 2px rgba(23,24,28,.05),0 4px 14px rgba(23,24,28,.05);
   --shadow-up:0 -1px 0 rgba(23,24,28,.04),0 8px 30px rgba(23,24,28,.12);
   --r:20px; --r-sm:14px;
@@ -32,6 +35,7 @@
     --bg:#111214; --card:#1B1C20; --field:#26272C; --ink:#F2F2F3; --muted:#A0A3AB; --line:#2C2E34; --line-2:#3A3C44;
     --accent:#8F99FF; --accent-ink:#111214; --accent-soft:#252845;
     --ok:#4FC98D; --ok-soft:#163026; --pend:#F2A94E; --pend-soft:#3A2A14; --warn:#FF8075; --warn-soft:#3D1E1B;
+    --dock:#2A2E5A; --dock-ink:#FFFFFF; --dock-muted:#BEC2E6; --dock-ok:#6FE0A6; --dock-warn:#FFC37A; --dock-accent:#8F99FF; --dock-accent-ink:#111214;
     --shadow:0 0 0 1px var(--line); --shadow-up:0 0 0 1px var(--line),0 8px 30px rgba(0,0,0,.5);
   }
 }
@@ -91,6 +95,7 @@ h2{font-size:17px;margin:22px 0 10px;letter-spacing:-.01em}
 .btn.wide{width:100%}
 .btn.big{min-height:58px;font-size:17px;border-radius:18px}
 .btn.ghost{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-2)}
+.btn.soft{background:var(--accent-soft);color:var(--accent)}
 .btn.sm{white-space:nowrap;min-height:38px;padding:0 13px;font-size:14.5px;border-radius:12px}
 .btn.danger{background:transparent;color:var(--warn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 40%,transparent)}
 .btn:disabled{opacity:.45;cursor:default}
@@ -280,13 +285,15 @@ details.more-ways[open] > summary::before{content:'− '}
 
 /* Dock: a floating card at the bottom with the number that matters. */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:0 10px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
-.dock-in{pointer-events:auto;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 12px 12px 18px;border-radius:24px;background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);box-shadow:var(--shadow-up)}
+.dock-in{pointer-events:auto;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 12px 12px 18px;border-radius:24px;background:var(--dock);color:var(--dock-ink);box-shadow:var(--shadow-up)}
 .dock-sum{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
-.dock-sum span{font-size:13px;color:var(--muted);font-weight:600}
+.dock-sum span{font-size:13px;color:var(--dock-muted);font-weight:600}
 .dock-sum strong{font-size:26px;font-weight:800;letter-spacing:-.02em}
-.dock-sum small{font-size:12.5px;color:var(--muted)}
-.dock-sum small.ok-text{color:var(--ok);font-weight:650}
-.dock-sum small.warn-text{color:var(--warn);font-weight:650}
+.dock-sum small{font-size:12.5px;color:var(--dock-muted)}
+.dock-sum small.ok-text{color:var(--dock-ok);font-weight:650}
+.dock-sum small.warn-text{color:var(--dock-warn);font-weight:650}
+.dock-in .btn{background:var(--dock-accent);color:var(--dock-accent-ink)}
+.dock-in .btn.ghost{background:transparent;color:var(--dock-ink);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.3)}
 .dock-sum strong{display:inline-block;transform-origin:left center}
 .dock-in > .btn.wide:only-child{flex:1}
 
