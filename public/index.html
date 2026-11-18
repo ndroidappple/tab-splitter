@@ -140,6 +140,8 @@ details.more-ways[open] > summary::before{content:'− '}
 
 /* Choices and the privacy switch: whole cards are the target. */
 .choices{display:grid;gap:8px}
+.choices.two{grid-template-columns:1fr 1fr}
+.choices.two .choice{align-items:center}
 .choice{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:var(--r-sm);background:var(--card);box-shadow:var(--shadow);cursor:pointer;transition:box-shadow 160ms}
 .choice:has(input:checked){box-shadow:inset 0 0 0 2px var(--accent)}
 .choice input{appearance:none;-webkit-appearance:none;flex:none;width:22px;height:22px;margin:1px 0 0;border-radius:50%;border:2px solid var(--line-2);background:var(--card);display:grid;place-items:center;transition:border-color 140ms}
@@ -283,12 +285,28 @@ details.more-ways[open] > summary::before{content:'− '}
 .dock-sum span{font-size:13px;color:var(--muted);font-weight:600}
 .dock-sum strong{font-size:26px;font-weight:800;letter-spacing:-.02em}
 .dock-sum small{font-size:12.5px;color:var(--muted)}
+.dock-sum small.ok-text{color:var(--ok);font-weight:650}
+.dock-sum small.warn-text{color:var(--warn);font-weight:650}
+.dock-sum strong{display:inline-block;transform-origin:left center}
+.dock-in > .btn.wide:only-child{flex:1}
 
 /* Sheets rise from the bottom edge on the surface spring, follow a drag down, and slide away however
    they close. The dialog covers the screen; the wrap follows the part the keyboard leaves visible. */
 dialog.sheet{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;padding:0;background:transparent;color:var(--ink);overflow:hidden}
+/* clip, not just hidden: a hidden box can still be scrolled by the browser. A rising sheet starts below the screen,
+   and Safari scrolled the dialog to bring it into view, so the sheet overshot upward and the dim slid away until
+   the rise ended and the scroll snapped back. A clipped box isn't a scroll container, so there is nothing to scroll. */
+dialog.sheet,.sheet-wrap{overflow:clip}
 dialog.sheet::backdrop{background:transparent}
-.sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center;transition:height 300ms cubic-bezier(.38,.7,.125,1)}
+/* The page underneath stays put without toggling its overflow (which makes Safari resize its toolbar mid-rise):
+   the dim takes no scroll gestures, and scrolling inside the sheet never hands off to the page. */
+dialog.sheet,.sheet-panel,#sheetBody{overscroll-behavior:contain}
+.scrim{touch-action:none}
+dialog.sheet[open] .sheet-panel{will-change:transform}
+dialog.sheet[open] .scrim{will-change:opacity}
+.sheet-wrap{position:absolute;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100%);display:flex;align-items:flex-end;justify-content:center}
+/* A closing sheet lets go of the page at once: the dialog is already closed and just finishing its slide, so taps go through. */
+dialog.sheet.exiting{display:block;z-index:20;pointer-events:none}
 .scrim{position:absolute;inset:0;background:rgba(10,11,14,.42)}
 .sheet-panel{position:relative;width:100%;max-width:560px;max-height:min(90vh,calc(100% - env(safe-area-inset-top) - 12px));display:flex;flex-direction:column;background:var(--card);border-radius:26px 26px 0 0;outline:none;box-shadow:0 -10px 40px rgba(0,0,0,.18)}
 .sheet-panel.dragging{will-change:transform}
@@ -339,7 +357,7 @@ dialog.sheet::backdrop{background:transparent}
 <main class="wrap" id="app"><p class="muted" role="status">Loading…</p></main>
 <div class="dock" id="dock" hidden><div class="dock-in" id="dockIn"></div></div>
 <dialog id="sheet" class="sheet" aria-labelledby="sheetTitle"><div class="sheet-wrap" id="sheetWrap"><div class="scrim" id="scrim"></div>
-  <div class="sheet-panel" id="sheetPanel" tabindex="-1"><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div></dialog>
+  <div class="sheet-panel" id="sheetPanel" tabindex="-1" autofocus><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div></dialog>
 <div id="toasts" role="status" aria-live="polite"></div>
 <noscript><p style="padding:20px">This page needs JavaScript turned on.</p></noscript>
 <script type="module" src="/app.mjs"></script>

@@ -48,7 +48,7 @@ flowchart LR
   month at a credit cap (`SCAN_CREDIT_CAP`, default 30), so a busy month can't run up the bill.
 - **A report for the host.** Each tab keeps an event log that phones never receive. `/api/report`
   turns it into milestones and metrics (time to settled, share paid within 2 hours, and so on) behind
-  the tab's "See the report" button.
+  the "See the report" link in Tab settings.
 - **No framework, no build step.** The page is plain HTML and ES modules served from `public/`. The
   only dependency is `@netlify/blobs`.
 
