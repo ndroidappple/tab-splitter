@@ -54,6 +54,10 @@ button,a{-webkit-tap-highlight-color:transparent}
 
 /* Header: frosted, so the page slides under it. */
 .top{position:sticky;top:0;z-index:4;padding-top:env(safe-area-inset-top);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+/* Setup screens drop the bar; only a blurred strip stays under the status bar so scrolled content doesn't run into the clock. */
+body.bare .top{border-bottom-color:transparent}
+body.bare .top-in{display:none}
+body.bare .wrap{padding-top:12px}
 .top-in{max-width:560px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:58px}
 .brand{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
 .brand strong{font-size:18px;font-weight:800;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

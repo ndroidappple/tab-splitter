@@ -171,6 +171,7 @@ function go(step, push = true) {
 }
 
 function renderStart() {
+  document.body.classList.add('bare'); // setup screens have nothing for the header to say, so it steps aside
   $('#title').textContent = 'Splitty';
   $('#subtitle').textContent = '';
   $('#meBtn').hidden = true;
@@ -183,6 +184,7 @@ function renderStart() {
   const d = readJSON('tab-draft', null);
   app.innerHTML = `
     <section class="hero">
+      <p class="eyebrow">Splitty</p>
       <h1>Split the bill<br>in a minute.</h1>
       <p class="lede">Snap the receipt. Everyone taps what they had and pays you back, tax and tip included.</p>
     </section>
@@ -691,6 +693,7 @@ function renderAll() {
   if (!tabId) return renderStart();
   if (!T) return;
   if (!me && linkPerson && T.people[linkPerson]) setMe(linkPerson, true);
+  document.body.classList.remove('bare');
   const C = compute_();
   $('#title').textContent = T.title || 'Tab';
   $('#subtitle').textContent = `${fmt(T.charge)} · paid by ${T.payer.name}${T.closed ? ' · closed' : ''}`;
