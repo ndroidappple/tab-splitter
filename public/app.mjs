@@ -154,12 +154,12 @@ function online(ok) { $('#netbar').hidden = ok; }
    ====================================================================== */
 const profile = readJSON('tab-profile', {});
 const S = {
-  step: 'photo', title: '', items: [], charge: '', receipt: null, check: null, scan: null, busy: false, photo: null,
+  step: 'photo', title: '', items: [], charge: '', tipIn: 'yes', tipPct: '20', receipt: null, check: null, scan: null, busy: false, photo: null,
   hostName: profile.name || '', venmo: profile.venmo || '', cashapp: profile.cashapp || '', paypal: profile.paypal || '', zelle: profile.zelle || '',
   private: !!profile.private, people: [], mode: 'items',
   paidBy: 'me', payer: { name: '', venmo: '', cashapp: '', paypal: '', zelle: '' }, // payer is used when someone else paid
 };
-const DRAFT = ['title', 'items', 'charge', 'receipt', 'check', 'scan', 'hostName', ...WAYS, 'private', 'people', 'mode', 'paidBy', 'payer'];
+const DRAFT = ['title', 'items', 'charge', 'tipIn', 'tipPct', 'receipt', 'check', 'scan', 'hostName', ...WAYS, 'private', 'people', 'mode', 'paidBy', 'payer'];
 const hasDraft = (d) => d && ((d.items || []).some((it) => it.name || it.price) || (d.people || []).length);
 function saveDraft() { store.set('tab-draft', JSON.stringify(Object.assign({ at: Date.now() }, Object.fromEntries(DRAFT.map((k) => [k, S[k]]))))); }
 const draft = !tabId ? readJSON('tab-draft', null) : null;
@@ -237,6 +237,8 @@ async function scanPhoto(file) {
     S.title = rc.merchant || '';
     S.items = (rc.items || []).map((it) => ({ name: tidyName(it.name || '', it.quantity || 1), qty: it.quantity || 1, price: dollars(Math.round((it.price || 0) * 100)) }));
     S.charge = dollars(d.charge);
+    // A check printed before tipping (a total but no card charge, tip or gratuity) still needs the tip added.
+    S.tipIn = rc.total != null && rc.card_charge == null && !rc.tip && !rc.gratuity ? 'no' : 'yes';
     S.photo = 'data:image/jpeg;base64,' + image; // kept in memory so the lines can be checked against it
     S.busy = false;
     go('review');
@@ -253,7 +255,23 @@ function reviewNumbers() {
   const rc = S.receipt;
   const inSub = rc && Array.isArray(rc.fees) ? rc.fees.filter((f) => f.listed_with_items).reduce((s, f) => s + Math.round(f.amount * 100), 0) : 0;
   const printed = rc ? Math.round(((rc.subtotal ?? rc.total) || 0) * 100) : null;
-  return { sum, printed, inSub, charge: toCents(S.charge) };
+  return { sum, printed, inSub, base: toCents(S.charge), tip: tipCents(sum + inSub), charge: chargeCents(sum + inSub) };
+}
+// When the total was before the tip, the tip is a percentage of the subtotal (the usual US way, not of tax),
+// added on top. The server only ever sees the final charge, so the split math doesn't change.
+const TIPS = ['15', '18', '20', '22'];
+const tipPct = () => { const v = String(S.tipPct ?? '').replace(/[%\s]/g, ''); const p = v === '' ? NaN : Number(v); return p >= 0 && p <= 100 ? p : NaN; };
+const tipCents = (subtotal) => (S.tipIn === 'no' ? Math.round(subtotal * tipPct() / 100) : 0);
+function chargeCents(subtotal) {
+  if (subtotal == null) { const n = reviewNumbers(); return n.charge; }
+  return toCents(S.charge) + tipCents(subtotal);
+}
+// Problems with the total and tip, in the words a toast should use; '' when it's all fine.
+function chargeProblem() {
+  const base = toCents(S.charge);
+  if (!Number.isInteger(base) || base <= 0) return S.tipIn === 'no' ? 'Enter the receipt total' : 'Enter what the card was charged';
+  if (S.tipIn === 'no' && !Number.isFinite(tipPct())) return 'Pick a tip percentage';
+  return '';
 }
 // The items' sum and whether it matches the receipt live in the dock, so they stay in view while lines are fixed.
 function reviewDock() {
@@ -268,24 +286,52 @@ function reviewStatus() {
   const n = reviewNumbers();
   const parts = [];
   if (Number.isFinite(n.charge) && n.charge > 0) {
-    if (n.charge < n.sum) parts.push(`<p class="banner warn">The card charge is less than the items. Check it.</p>`);
-    else parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
+    if (n.base < n.sum) parts.push(`<p class="banner warn">${S.tipIn === 'no' ? 'The receipt total' : 'The card charge'} is less than the items. Check it.</p>`);
+    else {
+      if (S.tipIn === 'no') parts.push(`<p class="tip-total"><span>Total with tip</span><b class="money">${fmt(n.charge)}</b></p>`);
+      parts.push(`<p class="note money">Tax, fees and tip: ${fmt(n.charge - n.sum)}</p>`);
+    }
   }
   return parts.join('');
+}
+// The tip picker, shown only when the total was before the tip.
+function tipBox() {
+  if (S.tipIn !== 'no') return '';
+  const custom = TIPS.includes(String(S.tipPct)) ? '' : S.tipPct;
+  return `<div class="tip-pcts" role="group" aria-label="Tip">
+      ${TIPS.map((t) => `<button type="button" data-act="tippct" data-v="${t}" aria-pressed="${String(S.tipPct) === t}">${t}%</button>`).join('')}
+      <label class="adorn sm pct"><input id="tipPct" class="in" inputmode="decimal" value="${esc(custom)}" placeholder="Other" aria-label="Other tip percentage" autocomplete="off"><span aria-hidden="true">%</span></label>
+    </div>
+    <p class="note money" id="tipLine">${tipLine()}</p>`;
+}
+function tipLine() {
+  const n = reviewNumbers(), sub = n.sum + n.inSub, p = tipPct();
+  return Number.isFinite(p) ? `${fmt(n.tip)} tip: ${p}% of the ${fmt(sub)} subtotal` : 'Pick a tip, or type your own.';
+}
+// Redraws what depends on the tip without touching the field being typed in.
+function refreshTip() {
+  setHTML($('#reviewStatus'), reviewStatus());
+  const line = $('#tipLine'); if (line) setHTML(line, tipLine());
+  app.querySelectorAll('[data-act="tippct"]').forEach((b) => b.setAttribute('aria-pressed', String(String(S.tipPct) === b.dataset.v)));
 }
 function renderReview() {
   const rc = S.receipt || {};
   const notes = [];
   if (rc.gratuity) notes.push(`This receipt already includes a ${fmt(Math.round(rc.gratuity * 100))} gratuity, so no extra tip is needed.`);
   if (rc.tip && rc.tip_included_in_total === false) notes.push(`Includes the ${fmt(Math.round(rc.tip * 100))} tip written below the total.`);
-  if (rc.card_charge == null && rc.total != null && !rc.tip) notes.push('If you added a tip when you paid, include it.');
   app.innerHTML = `
     <h1>${S.receipt ? 'Check the receipt' : 'Add the items'}</h1>
     ${S.photo ? `<button type="button" class="photo-btn" data-act="photo"><img src="${S.photo}" alt=""><span><b>See the receipt</b><small class="muted">Tap to compare</small></span>${CHEV}</button>` : ''}
     <div class="card totals">
-      <label class="f" for="charge" style="margin-top:0">Total charged to the card, with tip</label>
+      <p class="f" id="tipQ" style="margin-top:0">Is the tip already in the total?</p>
+      <div class="choices two tip-q" role="radiogroup" aria-labelledby="tipQ">
+        <label class="choice"><input type="radio" name="tipIn" value="yes" ${S.tipIn !== 'no' ? 'checked' : ''}><span><b>Yes</b></span></label>
+        <label class="choice"><input type="radio" name="tipIn" value="no" ${S.tipIn === 'no' ? 'checked' : ''}><span><b>No, add one</b></span></label>
+      </div>
+      <label class="f" for="charge">${S.tipIn === 'no' ? 'Receipt total, before tip' : 'Total charged to the card, with tip'}</label>
       <div class="adorn big"><span aria-hidden="true">$</span><input id="charge" class="in money" inputmode="decimal" value="${esc(S.charge)}" placeholder="0.00" autocomplete="off"></div>
       ${notes.map((n) => `<p class="note">${esc(n)}</p>`).join('')}
+      ${tipBox()}
       <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
     </div>
     <label class="f" for="tTitle">Name this tab</label>
@@ -355,8 +401,9 @@ document.addEventListener('input', dropPrefix, true);
 app.addEventListener('input', (e) => {
   if (tabId) return;
   const row = e.target.closest('.ie');
-  if (row) { S.items[Number(row.dataset.k)][e.target.dataset.f] = e.target.value; setHTML($('#reviewStatus'), reviewStatus()); reviewDock(); saveDraft(); return; }
-  if (e.target.id === 'charge') { S.charge = e.target.value; setHTML($('#reviewStatus'), reviewStatus()); }
+  if (row) { S.items[Number(row.dataset.k)][e.target.dataset.f] = e.target.value; refreshTip(); reviewDock(); saveDraft(); return; }
+  if (e.target.id === 'charge') { S.charge = e.target.value; refreshTip(); }
+  if (e.target.id === 'tipPct') { S.tipPct = e.target.value; refreshTip(); }
   if (e.target.id === 'tTitle') S.title = e.target.value;
   if (e.target.id === 'hostName') S.hostName = e.target.value;
   if (WAYS.includes(e.target.id)) S[e.target.id] = e.target.value;
@@ -369,6 +416,7 @@ app.addEventListener('input', (e) => {
 app.addEventListener('change', (e) => {
   if (tabId) return;
   if (e.target.name === 'paidBy') { if (S.paidBy !== e.target.value) { S.paidBy = e.target.value; saveDraft(); renderPeople(); } return; }
+  if (e.target.name === 'tipIn') { if (S.tipIn !== e.target.value) { S.tipIn = e.target.value; saveDraft(); renderReview(); } return; }
   if (e.target.name === 'mode') S.mode = e.target.value;
   if (e.target.id === 'private') S.private = e.target.checked;
   saveDraft();
@@ -391,8 +439,9 @@ function validItems() {
 async function createTab() {
   let items;
   try { items = validItems(); } catch (e) { toast(e.message); return; }
-  const charge = toCents(S.charge);
-  if (!Number.isInteger(charge) || charge <= 0) { toast('Enter what the card was charged'); go('review'); return; }
+  const bad = chargeProblem();
+  if (bad) { toast(bad); go('review'); return; }
+  const charge = chargeCents();
   const other = S.paidBy === 'other';
   if (other && !S.payer.name.trim()) { toast('Enter who paid'); $('#payerName').focus(); return; }
   if (!S.hostName.trim()) { toast('Enter your name'); $('#hostName').focus(); return; }
@@ -425,10 +474,11 @@ function startClick(e) {
   if (a === 'photo') openSheet({ type: 'photo' });
   if (a === 'addline') { S.items.push({ name: '', qty: 1, price: '' }); saveDraft(); renderStart(); const ins = app.querySelectorAll('.ie'); ins[ins.length - 1].querySelector('input').focus(); }
   if (a === 'delline') { S.items.splice(Number(b.dataset.k), 1); saveDraft(); renderStart(); }
-  if (a === 'toPeople') { try { validItems(); } catch (err) { toast(err.message); return; } const c = toCents(S.charge); if (!Number.isInteger(c) || c <= 0) { toast('Enter what the card was charged'); $('#charge').focus(); return; } go('people'); }
+  if (a === 'toPeople') { try { validItems(); } catch (err) { toast(err.message); return; } const bad = chargeProblem(); if (bad) { toast(bad); (bad.includes('tip') ? $('#tipPct') : $('#charge')).focus(); return; } go('people'); }
+  if (a === 'tippct') { S.tipPct = b.dataset.v; const c = $('#tipPct'); if (c) c.value = ''; saveDraft(); refreshTip(); }
   if (a === 'restart') {
     const was = JSON.stringify(S);
-    Object.assign(S, { items: [], charge: '', receipt: null, check: null, scan: null, title: '', photo: null });
+    Object.assign(S, { items: [], charge: '', tipIn: 'yes', tipPct: '20', receipt: null, check: null, scan: null, title: '', photo: null });
     store.set('tab-draft', null); go('photo');
     toast('Started over', { undo: () => { Object.assign(S, JSON.parse(was)); go('review'); } });
   }

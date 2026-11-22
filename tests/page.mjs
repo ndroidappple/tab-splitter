@@ -360,5 +360,39 @@ await step('reopening the tab on that phone keeps it as Nick', async () => {
   assert.ok(!back.$(`[data-act="remind"][data-p="${T.organizer}"]`), 'no reminding yourself');
 });
 
+// ---------- A check printed before the tip: the tip is added on top ----------
+const tipper = await phone('/');
+await step('a total before tip adds the picked percentage of the subtotal', async () => {
+  await tipper.click('[data-act="type"]');
+  const rows = tipper.w.document.querySelectorAll('.ie');
+  await tipper.type(rows[0].querySelector('[data-f="name"]'), 'Pasta');
+  await tipper.type(rows[0].querySelector('[data-f="price"]'), '30.00');
+  await tipper.type(rows[1].querySelector('[data-f="name"]'), 'Wine');
+  await tipper.type(rows[1].querySelector('[data-f="price"]'), '20.00');
+  await tipper.type('#charge', '54.00');
+  assert.ok(!tipper.$('.tip-pcts'), 'no tip picker while the tip is in the total');
+  const no = tipper.$('input[name="tipIn"][value="no"]');
+  no.checked = true; no.dispatchEvent(new tipper.w.Event('change', { bubbles: true })); await tick(30);
+  assert.match(tipper.text('label[for="charge"]'), /before tip/);
+  assert.match(tipper.text('#tipLine'), /\$10\.00 tip: 20% of the \$50\.00 subtotal/);
+  assert.match(tipper.text('#reviewStatus'), /Total with tip ?\$64\.00/);
+  await tipper.click('[data-act="tippct"][data-v="18"]');
+  assert.match(tipper.text('#reviewStatus'), /Total with tip ?\$63\.00/);
+  await tipper.type('#tipPct', '25');
+  assert.equal(tipper.$('[data-act="tippct"][data-v="18"]').getAttribute('aria-pressed'), 'false');
+  assert.match(tipper.text('#reviewStatus'), /Total with tip ?\$66\.50.*Tax, fees and tip: \$16\.50/);
+  await tipper.type('#tipPct', '');
+  await tipper.click('[data-act="toPeople"]');
+  assert.ok(tipper.$('#charge'), 'no tip picked, so it stays on the receipt');
+  await tipper.type('#tipPct', '25');
+  const draft = JSON.parse(tipper.w.localStorage.getItem('tab-draft'));
+  assert.equal(draft.tipIn, 'no'); assert.equal(draft.tipPct, '25');
+  await tipper.click('[data-act="toPeople"]');
+  await tipper.type('#hostName', 'Nick');
+  tipper.$('#addName').value = 'Anna'; await tipper.submit('#addForm');
+  await tipper.click('[data-act="create"]');
+  assert.equal(store.raw(keyFor(tipper.w.location.pathname.slice(3))).charge, 6650);
+});
+
 console.log(failures ? `\n${failures} failed` : '\nall page steps passed');
 process.exit(failures ? 1 : 0);
