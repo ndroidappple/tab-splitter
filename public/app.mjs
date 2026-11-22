@@ -297,7 +297,7 @@ function reviewStatus() {
 // The tip, kept small: a quiet line under the total, or a compact picker once a tip is being added.
 function tipBox() {
   const rc = S.receipt || {};
-  if (S.tipIn !== 'no') return rc.tip || rc.gratuity ? '' : '<p class="note tip-hint">Tip included. <button type="button" class="link" data-act="addtip">Add one</button></p>';
+  if (S.tipIn !== 'no') return rc.tip || rc.gratuity ? '' : '<p class="note tip-hint">Tip not included? <button type="button" class="link" data-act="addtip">Add one</button></p>';
   const custom = TIPS.includes(String(S.tipPct)) ? '' : S.tipPct;
   return `<div class="tip-add">
       <p class="note tip-hint"><span>${S.tipAuto ? 'Looks pre-tip, so I added one.' : 'Adding a tip.'}</span> <button type="button" class="link" data-act="notip" aria-label="Remove the tip, it’s already included">Remove</button></p>

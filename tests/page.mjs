@@ -371,7 +371,7 @@ await step('a total before tip adds the picked percentage of the subtotal', asyn
   await tipper.type(rows[1].querySelector('[data-f="price"]'), '20.00');
   await tipper.type('#charge', '54.00');
   assert.ok(!tipper.$('.tip-pcts'), 'no tip picker while the tip is in the total');
-  assert.match(tipper.text('#tipBox'), /Tip included/);
+  assert.match(tipper.text('#tipBox'), /Tip not included\? Add one/);
   await tipper.click('[data-act="addtip"]');
   assert.equal(tipper.text('label[for="charge"]'), 'Receipt total');
   assert.match(tipper.text('#tipLine'), /\$10\.00 tip \(20% of the subtotal\) brings it to \$64\.00/);
