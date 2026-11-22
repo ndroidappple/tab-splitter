@@ -107,16 +107,18 @@ h2{font-size:17px;margin:22px 0 10px;letter-spacing:-.01em}
 .row2 > *{flex:1}
 
 /* Fields */
-label.f,p.f{display:block;font-weight:650;font-size:14px;margin:14px 0 6px}
-/* Tip: is it in the total, and if not, how much to add. */
-.tip-q .choice{padding:12px 14px}
-.tip-pcts{display:grid;grid-template-columns:repeat(4,1fr) 1.4fr;gap:6px;margin-top:12px}
-.tip-pcts button{min-height:42px;border:0;border-radius:12px;background:var(--field);color:var(--ink);font-weight:650;font-size:15px;cursor:pointer}
-.tip-pcts button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+label.f{display:block;font-weight:650;font-size:14px;margin:14px 0 6px}
+/* Tip: a quiet line under the total, and a compact picker when one is being added. */
+.tip-hint{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:baseline}
+.tip-hint .link{font-size:14px;padding:8px 4px;margin:-8px -4px}
+.tip-pcts{display:grid;grid-template-columns:repeat(4,1fr) 1.3fr;gap:6px;margin-top:8px}
+.tip-pcts button{min-height:34px;border:0;border-radius:999px;background:var(--field);color:var(--muted);font-weight:650;font-size:14px;cursor:pointer}
+.tip-pcts button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-text)}
 .adorn.sm.pct > span{left:auto;right:12px}
-.adorn.sm.pct .in{padding:0 26px 0 12px;width:100%;min-width:0;text-align:right}
-.tip-total{display:flex;justify-content:space-between;align-items:baseline;margin:12px 2px 0;font-weight:650}
-.tip-total b{font-size:20px}
+.adorn.sm.pct .in{min-height:34px;border-radius:999px;font-size:14px;padding:0 24px 0 10px;width:100%;min-width:0;text-align:right}
+#tipLine b{color:var(--ink)}
+.adorn.sm.pct .in:placeholder-shown{padding-right:10px;text-align:center}
+.adorn.sm.pct .in:placeholder-shown + span{display:none}
 .in{width:100%;min-height:50px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--card);padding:0 14px;font-size:16px;transition:border-color 140ms,box-shadow 140ms}
 .in:focus{outline:none;border-color:var(--accent-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .in::placeholder{color:color-mix(in srgb,var(--muted) 75%,transparent)}
