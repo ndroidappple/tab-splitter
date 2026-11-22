@@ -55,6 +55,14 @@ button,a{-webkit-tap-highlight-color:transparent}
 /* Header: frosted, so the page slides under it. */
 .top{position:sticky;top:0;z-index:4;padding-top:env(safe-area-inset-top);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 /* Setup screens drop the bar; only a blurred strip stays under the status bar so scrolled content doesn't run into the clock. */
+/* The tab's name as the page title, editable in place. */
+.title-edit{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding-bottom:4px;box-shadow:0 2px 0 transparent;transition:box-shadow 160ms;cursor:text}
+.title-edit:focus-within{box-shadow:0 2px 0 var(--accent)}
+.h1-in{flex:1;min-width:0;border:0;background:none;padding:0;margin:0;color:var(--ink);font:800 30px/1.15 ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:-.025em;text-overflow:ellipsis}
+.h1-in::placeholder{color:color-mix(in srgb,var(--muted) 55%,transparent)}
+.h1-in:focus,.h1-in:focus-visible{outline:none}
+.title-edit svg{flex:none;width:20px;height:20px;color:var(--muted);transition:opacity 140ms}
+.title-edit:focus-within svg{opacity:0}
 body.bare .top{border-bottom-color:transparent}
 body.bare .top-in{display:none}
 body.bare .wrap{padding-top:12px}

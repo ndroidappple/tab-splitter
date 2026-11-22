@@ -374,13 +374,16 @@ function refreshTip() {
   const line = $('#tipLine'); if (line) setHTML(line, tipLine());
   app.querySelectorAll('[data-act="tippct"]').forEach((b) => b.setAttribute('aria-pressed', String(String(S.tipPct) === b.dataset.v)));
 }
+// The tab's name is the page title, so it reads as named the moment it's scanned; the pencil says it can change.
+const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function renderReview() {
   const rc = S.receipt || {};
   const notes = [];
   if (rc.gratuity) notes.push(`This receipt already includes a ${fmt(Math.round(rc.gratuity * 100))} gratuity, so no extra tip is needed.`);
   if (rc.tip && rc.tip_included_in_total === false) notes.push(`Includes the ${fmt(Math.round(rc.tip * 100))} tip written below the total.`);
   app.innerHTML = `
-    <h1>${S.receipt ? 'Check the receipt' : 'Add the items'}</h1>
+    <p class="eyebrow">${S.receipt ? 'Check the receipt' : 'Add the items'}</p>
+    <label class="title-edit"><input id="tTitle" class="h1-in" value="${esc(S.title)}" placeholder="Name this tab" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="done" aria-label="Tab name">${PENCIL}</label>
     ${S.photo ? `<button type="button" class="photo-btn" data-act="photo"><img src="${S.photo}" alt=""><span><b>See the receipt</b><small class="muted">Tap to compare</small></span>${CHEV}</button>` : ''}
     <div class="card totals">
       <label class="f" for="charge" style="margin-top:0">${S.tipIn === 'no' ? 'Receipt total' : 'Total charged to the card'}</label>
@@ -389,8 +392,6 @@ function renderReview() {
       <div id="tipBox">${tipBox()}</div>
       <div id="reviewStatus" role="status" aria-live="polite">${reviewStatus()}</div>
     </div>
-    <label class="f" for="tTitle">Name this tab</label>
-    <input id="tTitle" class="in" value="${esc(S.title)}" placeholder="Friday dinner" maxlength="60" autocomplete="off">
     <h2>Items</h2>
     <div class="items-edit" id="itemsEdit">${S.items.map(itemRow).join('')}</div>
     <button type="button" class="btn ghost wide add-line" data-act="addline">+ Add a line</button>
