@@ -178,6 +178,7 @@ function renderStart() {
   $('#dock').hidden = true;
   if (S.step === 'review') return renderReview();
   if (S.step === 'people') return renderPeople();
+  if (S.busy) return renderScan();
   const recent = readJSON('tab-recent', []).filter((x) => x && /^[a-z0-9]{10}$/.test(x.id));
   const d = readJSON('tab-draft', null);
   app.innerHTML = `
@@ -188,12 +189,10 @@ function renderStart() {
     ${hasDraft(d) ? `<div class="card resume"><div><b>Pick up where you left off</b><span class="muted">${esc(d.title || 'Your last receipt')} · ${plural((d.items || []).filter((it) => it.name).length, 'item')}</span></div>
       <div class="row2"><button type="button" class="btn sm soft" data-act="resume">Continue</button><button type="button" class="btn sm ghost" data-act="discard">Discard</button></div></div>` : ''}
     <div class="stack">
-      <label class="btn wide big" for="photo">${S.busy ? `<span class="spin"></span> ${S.warming ? 'Waking up the receipt reader…' : 'Reading the receipt…'}` : 'Take a photo of the receipt'}</label>
-      <input id="photo" type="file" accept="image/*" class="sr" ${S.busy ? 'disabled' : ''}>
-      ${S.warming ? '<p class="note" style="text-align:center;margin:0">This can take up to a minute when Splitty hasn’t been used in a while.</p>' : ''}
-      <button type="button" class="btn ghost wide" data-act="type" ${S.busy && !S.warming ? 'disabled' : ''}>Type the items instead</button>
+      <label class="btn wide big" for="photo">Take a photo of the receipt</label>
+      <input id="photo" type="file" accept="image/*" class="sr">
+      <button type="button" class="btn ghost wide" data-act="type">Type the items instead</button>
     </div>
-    <p id="scanStatus" class="sr" role="status" aria-live="polite">${S.busy ? 'Reading the receipt' : ''}</p>
     ${recent.length ? `<h2 class="group">Your tabs</h2><div class="rows">${recent.map((x) => `<a class="list-row" href="/t/${x.id}"><span class="grow"><b>${esc(x.title)}</b><small class="muted">${new Date(x.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${fmt(x.charge || 0)}${x.host ? ' · you paid' : x.payer ? ` · ${esc(x.payer)} paid` : ''}</small></span>${CHEV}</a>`).join('')}</div>` : ''}`;
   $('#photo').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) scanPhoto(f); });
 }
@@ -210,12 +209,59 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+/* While Claude reads the receipt: the photo itself with a light passing down it, and three steps that
+   tick off. The steps are paced to a typical read (Haiku answers in about 5 to 8 seconds; a reread by
+   Sonnet takes longer), so the last one waits for the real answer. Typing the items is offered only
+   once it's slow, as the way out for the people who need it. */
+const SCAN_STEPS = ['Finding the items', 'Matching each price', 'Checking they add up'];
+const scan = { step: 0, slow: false, done: '', timers: [] };
+function renderScan() {
+  app.innerHTML = `
+    <section class="scan" aria-busy="true">
+      <div class="scan-frame">${S.photo ? `<img src="${S.photo}" alt="">` : '<span class="scan-paper"></span>'}<span class="scan-beam" aria-hidden="true"></span><span class="scan-ok" aria-hidden="true">✓</span></div>
+      <h1 id="scanTitle"></h1>
+      <ol class="scan-steps">${SCAN_STEPS.map((t) => `<li>${t}</li>`).join('')}</ol>
+      <p class="note scan-note" id="scanNote"></p>
+      <p id="scanStatus" class="sr" role="status" aria-live="polite"></p>
+    </section>`;
+  paintScan();
+}
+// Updates the screen in place, so the photo and the light don't restart.
+function paintScan() {
+  const box = app.querySelector('.scan'); if (!box) return;
+  const done = !!scan.done;
+  box.classList.toggle('done', done);
+  box.setAttribute('aria-busy', String(!done));
+  const img = box.querySelector('.scan-frame img');
+  if (S.photo && !img) box.querySelector('.scan-frame').insertAdjacentHTML('afterbegin', `<img src="${S.photo}" alt="">`);
+  if (S.photo) { const p = box.querySelector('.scan-paper'); if (p) p.remove(); }
+  box.querySelectorAll('.scan-steps li').forEach((li, k) => { li.className = done || k < scan.step ? 'done' : k === scan.step ? 'now' : ''; });
+  const title = done ? scan.done : S.warming ? 'Waking up the reader' : 'Reading your receipt';
+  setHTML($('#scanTitle'), esc(title));
+  setHTML($('#scanNote'), done ? ''
+    : S.warming ? 'This can take up to a minute when Splitty hasn’t been used in a while. <button type="button" class="link" data-act="type">Type the items</button>'
+    : scan.slow ? 'Taking a while? <button type="button" class="link" data-act="type">Type the items</button>' : '');
+  setHTML($('#scanStatus'), esc(done ? title : S.warming ? title : SCAN_STEPS[scan.step]));
+}
+function stopScanClock() { scan.timers.forEach(clearTimeout); scan.timers = []; }
+function startScanClock() {
+  stopScanClock();
+  Object.assign(scan, { step: 0, slow: false, done: '' });
+  const at = (ms, fn) => scan.timers.push(setTimeout(() => { fn(); paintScan(); }, ms));
+  at(2500, () => { if (!S.warming) scan.step = 1; });
+  at(6000, () => { if (!S.warming) scan.step = 2; });
+  at(9000, () => { scan.slow = true; });
+}
+
 let scanRun = 0; // bumped when someone gives up on a scan, so a late answer doesn't replace what they typed
 async function scanPhoto(file) {
   const run = ++scanRun;
-  S.busy = true; S.warming = false; renderStart();
+  S.busy = true; S.warming = false; S.photo = null; startScanClock(); renderStart();
   try {
     const image = await shrink(file);
+    if (run !== scanRun) return;
+    S.photo = 'data:image/jpeg;base64,' + image; // shown while it's read, then kept so the lines can be checked against it
+    paintScan();
     // 503 means Netlify hasn't given the server its AI key yet. That lags for up to a minute after a
     // deploy or a quiet spell, so say so and keep retrying; typing the items stays available meanwhile.
     let r, d;
@@ -225,7 +271,7 @@ async function scanPhoto(file) {
       d = r ? await r.json().catch(() => ({})) : {};
       if (run !== scanRun) return;
       if ((r && r.status !== 503) || attempt >= 18) break; // about 90 seconds in all
-      if (!S.warming) { S.warming = true; renderStart(); }
+      if (!S.warming) { S.warming = true; scan.step = 0; paintScan(); }
       await new Promise((res) => setTimeout(res, 5000));
       if (run !== scanRun) return;
     }
@@ -240,12 +286,19 @@ async function scanPhoto(file) {
     // A check printed before tipping (a total but no card charge, tip or gratuity) still needs the tip added.
     S.tipAuto = rc.total != null && rc.card_charge == null && !rc.tip && !rc.gratuity;
     S.tipIn = S.tipAuto ? 'no' : 'yes';
-    S.photo = 'data:image/jpeg;base64,' + image; // kept in memory so the lines can be checked against it
+    // A beat to show what was found, so the answer lands before the next screen does.
+    stopScanClock();
+    const n = S.items.length, sum = S.items.reduce((t, it) => t + (toCents(it.price) || 0), 0);
+    scan.done = n ? `Found ${plural(n, 'item')} · ${fmt(sum)}` : 'Done';
+    paintScan();
+    await new Promise((res) => setTimeout(res, 900));
+    if (run !== scanRun) return;
     S.busy = false;
     go('review');
   } catch (e) {
     if (run !== scanRun) return;
-    S.busy = false; S.warming = false; renderStart();
+    stopScanClock();
+    S.busy = false; S.warming = false; S.photo = null; renderStart();
     // Server messages already say what to do next; a photo the phone can't open throws an Event, not an Error.
     toast((e && e.message) || 'Couldn’t open that photo. Try again, or type the items.');
   }
@@ -467,7 +520,7 @@ function startClick(e) {
   if (tabId) return;
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
-  if (a === 'type') { scanRun++; S.busy = false; S.warming = false; S.receipt = null; S.scan = null; if (!S.items.length) S.items = [{ name: '', qty: 1, price: '' }, { name: '', qty: 1, price: '' }]; go('review'); app.querySelector('.ie input').focus(); }
+  if (a === 'type') { if (S.busy) { stopScanClock(); S.photo = null; } scanRun++; S.busy = false; S.warming = false; S.receipt = null; S.scan = null; if (!S.items.length) S.items = [{ name: '', qty: 1, price: '' }, { name: '', qty: 1, price: '' }]; go('review'); app.querySelector('.ie input').focus(); }
   if (a === 'resume') { Object.assign(S, readJSON('tab-draft', {})); go('review'); }
   if (a === 'discard') { const was = store.get('tab-draft'); store.set('tab-draft', null); renderStart(); toast('Draft discarded', { undo: () => { store.set('tab-draft', was); renderStart(); } }); }
   if (a === 'photo') openSheet({ type: 'photo' });
